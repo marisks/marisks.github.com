@@ -1,0 +1,499 @@
+<?xml version="1.0" encoding="UTF-8"?><rss xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:atom="http://www.w3.org/2005/Atom" version="2.0">
+    <channel>
+        <title><![CDATA[marisks # code]]></title>
+        <description><![CDATA[blog about .NET, JavaScript, Web, Optimizely (ex Episerver) and programming languages]]></description>
+        <link>http://marisks.net</link>
+        <generator>RSS for Node</generator>
+        <lastBuildDate>Wed, 28 Jun 2023 13:07:38 GMT</lastBuildDate>
+        <atom:link href="http://marisks.net/episerver-rss.xml" rel="self" type="application/rss+xml"/>
+        <pubDate>Wed, 28 Jun 2023 13:07:15 GMT</pubDate>
+        <item>
+            <title><![CDATA[Upgraded Geta Optimizely packages]]></title>
+            <description><![CDATA[<h1 id="geta-optimizely-extensions">Geta.Optimizely.Extensions</h1>
+<p>The old package <em>Geta.EPi.Extensions</em> has been renamed to <em>Geta.Optimizely.Extensions</em>. Install it using Nuget package manager or from the command line:</p>
+<pre><code>Install-Package Geta.Optimizely.Extensions
+</code></pre><p>The package has almost the same functionality as the previous version. The only change is that we have removed <code>XForms</code> related functionality as it is not supported in <em>Optimizely 12</em> anymore.</p>
+<p>For more information check the <a href="https://github.com/Geta/geta-optimizely-extensions">Github page</a>.</p>
+<h1 id="sitemaps-and-sitemaps-commerce">Sitemaps and Sitemaps.Commerce</h1>
+<p>The old packages <em>Geta.SEO.Sitemaps</em> and <em>Geta.SEO.Sitemaps.Commerce</em> has been renamed to <em>Geta.Optimizely.Sitemaps</em> and <em>Geta.Optimizely.Sitemaps.Commerce</em>. Install those using Nuget package manager or from the command line:</p>
+<pre><code>Install-Package Geta.Optimizely.Sitemaps
+Install-Package Geta.Optimizely.Sitemaps.Commerce
+</code></pre><p>After installation, you have to configure it. Register the <em>Sitemaps</em> and/or <em>Sitemaps Commerce</em> in the service collection first:</p>
+<pre><code>services.AddSitemaps(x =&gt;
+{
+  x.EnableLanguageDropDownInAdmin = false;
+  x.EnableRealtimeCaching = true;
+  x.EnableRealtimeSitemap = false;
+});
+services.AddSitemapsCommerce();
+</code></pre><p>Then make sure that you have razor pages mapped:</p>
+<pre><code>app.UseEndpoints(endpoints =&gt;
+{
+    endpoints.MapRazorPages();
+});
+</code></pre><p>After that, you will see a new top menu item for the <em>Sitemaps</em> in the <em>Optimizely</em> administration UI. There is a new administration user interface, but it has the same functionality as the old one.</p>
+<p>For more information check the <a href="https://github.com/Geta/geta-optimizely-sitemaps">Github page</a>.</p>
+<h1 id="geta-optimizely-googleproductfeed">Geta.Optimizely.GoogleProductFeed</h1>
+<p>The package <em>Geta.GoogleProductFeed</em> has been renamed to <em>Geta.Optimizely.GoogleProductFeed</em> so that all the naming is consistent with other <em>Optimizely</em> packages. Install it using Nuget package manager or from the command line:</p>
+<pre><code>Install-Package Geta.Optimizely.GoogleProductFeed
+</code></pre><p>After installation, you have to configure it. Register the <em>GoogleProductFeed</em> in the service collection first:</p>
+<pre><code>services.AddGoogleProductFeed(x =&gt;
+{
+    x.ConnectionString = _configuration.GetConnectionString(&quot;EPiServerDB&quot;);
+});
+</code></pre><p>Then you have to create your <code>FeedBuilder</code>. See the <a href="https://github.com/Geta/geta-optimizely-googleproductfeed">documentation</a>.</p>
+<p>Once, it is created register it in the service collection:</p>
+<pre><code>services.AddTransient&lt;FeedBuilder, MyFeedBuilder&gt;();
+</code></pre><p>For more information check the <a href="https://github.com/Geta/geta-optimizely-googleproductfeed">Github page</a>.</p>
+<h1 id="geta-optimizely-contenttypeicons">Geta.Optimizely.ContentTypeIcons</h1>
+<p>We had a package <em>Geta.Epi.FontThumbnail</em> for the older Episerver/Optimizely versions. The package name did not describe what it was. So we renamed it to <em>Geta.Optimizely.ContentTypeIcons</em>. Install it using Nuget package manager or from the command line:</p>
+<pre><code>Install-Package Geta.Optimizely.ContentTypeIcons
+</code></pre><p>After installation, you have to configure it. Register the <em>ContentTypeIcons</em> in the service collection first:</p>
+<pre><code>services.AddContentTypeIcons(x =&gt;
+{
+    x.EnableTreeIcons = true;
+    x.ForegroundColor = &quot;#ffffff&quot;;
+    x.BackgroundColor = &quot;#02423F&quot;;
+    x.FontSize = 40;
+    x.CachePath = &quot;[appDataPath]\\thumb_cache\\&quot;;
+    x.CustomFontPath = &quot;[appDataPath]\\fonts\\&quot;;
+});
+</code></pre><p>Now you can start using it by adding the <code>ContentTypeIcon</code> attribute to your content types. For example:</p>
+<pre><code>[ContentTypeIcon(FontAwesome5Brands.Github)]
+</code></pre><p>This attribute on a page type will show you a <em>Github</em> icon when you will create a new page of this page type. Also, if you have the <code>EnableTreeIcons</code> setting enabled, you will see the icon in the content tree.</p>
+<p>You can also use the <code>TreeIcon</code> attribute to override the behavior for the content tree. You can set a different icon or ignore the icon completely:</p>
+<pre><code>[TreeIcon(Ignore = true)]
+[TreeIcon(FontAwesome5Solid.CheckDouble)]
+</code></pre><p>For more information check the <a href="https://github.com/Geta/geta-optimizely-contenttypeicons">Github page</a>.</p>
+]]></description>
+            <link>http://marisks.net/2021/12/23/upgraded-optimizely-packages/</link>
+            <guid isPermaLink="true">http://marisks.net/2021/12/23/upgraded-optimizely-packages/</guid>
+            <pubDate>Thu, 23 Dec 2021 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[New Geta.NotFoundHandler]]></title>
+            <description><![CDATA[<h1 id="the-new-name-geta-notfoundhandler">The new name - Geta.NotFoundHandler</h1>
+<p>We have changed the name of the package again. The reason for this is that the old name was inconsistent throughout the code. The assembly name was <code>Geta.404Handler</code>, but namespaces started with <code>Geta.NotFoundHandler</code>. We could have changed namespaces to have <code>404Handler</code> in the name, but namespaces&#39; parts in .NET can&#39;t start with a number.</p>
+<h1 id="asp-net-5-and-optimizely">ASP.NET 5 and Optimizely</h1>
+<p>After reviewing the library, we found that it was not so dependent on <em>Optimizely</em> (<em>Episerver</em>). So we refactored the library that supports ASP.NET 5 and added administrative UI integration in <em>Optimizely</em>. Now there are three separate packages:</p>
+<ul>
+<li><code>Geta.NotFoundHandler</code> - the core library for ASP.NET 5.</li>
+<li><code>Geta.NotFoundHandler.Admin</code> - the administrative UI.</li>
+<li><code>Geta.NotFoundHandler.Optimizely</code> - a module that integrates administrative UI in Optimizely UI.</li>
+</ul>
+<h1 id="getting-started-in-asp-net">Getting started in ASP.NET</h1>
+<p>In an ASP.NET 5 project install <code>Geta.NotFoundHandler.Admin</code> and in the <code>Startup.ConfigureServices</code> method configure the <em>NotFoundHandler</em>. You have to provide a connection string at least.</p>
+<pre><code>public void ConfigureServices(IServiceCollection services)
+{
+    var connectionString = ... // Retrieve connection string here
+    services.AddNotFoundHandler(o =&gt;
+    {
+        o.UseSqlServer(connectionstring);
+    });
+}
+</code></pre><p>By default, users in the <em>Administrators</em> role will have access to the administration UI. You can change the default policy in the configuration:</p>
+<pre><code>public void ConfigureServices(IServiceCollection services)
+{
+    var connectionString = ... // Retrieve connection string here
+    services.AddNotFoundHandler(o =&gt;
+    {
+        o.UseSqlServer(connectionstring);
+    }, policy =&gt;
+    {
+        policy.RequireRole(&quot;MyRole&quot;);
+    });
+}
+</code></pre><p>Next, initialize <em>NotFoundHandler</em> in the <code>Configure</code> method as the first registration. It will make sure that the handler will catch all 404 errors.</p>
+<pre><code>public void Configure(IApplicationBuilder app)
+{
+    app.UseNotFoundHandler();
+}
+</code></pre><p>Now you should be able to access administrative UI by <code>https://mysite/Geta.NotFoundHandler.Admin</code>.</p>
+<p><img src="/img/2021-11/redirects.png" class="img-responsive" alt=""></p>
+<h1 id="getting-started-in-optimizely">Getting started in Optimizely</h1>
+<p>In an Optimizely project install <code>Geta.NotFoundHandler.Optimizely</code> package. Then configure the handler in <code>Startup.ConfigureServices</code> method. Set the connection string and add access for the CMS administrators.</p>
+<pre><code>public void ConfigureServices(IServiceCollection services)
+{
+    var connectionString = ... // Retrieve connection string here
+    services.AddNotFoundHandler(o =&gt;
+    {
+        o.UseSqlServer(connectionString);
+    }, policy =&gt;
+    {
+        policy.RequireRole(Roles.CmsAdmins);
+    });
+    services.AddOptimizelyNotFoundHandler();
+}
+</code></pre><p>As in the ASP.NET case, initialize <em>NotFoundHandler</em> in the <code>Configure</code> method as the first registration.</p>
+<pre><code>public void Configure(IApplicationBuilder app)
+{
+    app.UseNotFoundHandler();
+}
+</code></pre><p>Run the application and in the <em>Optimizely</em> administrative UI you will find a link to the <em>NotFounHandler</em> administrative UI in the top menu.</p>
+<p><img src="/img/2021-11/optimizely-redirects.jpg" class="img-responsive" alt=""></p>
+<h1 id="summary">Summary</h1>
+<p><em>NotFoundHandler</em> now is ready for use in the new <em>Optimizely</em> 12, but if you are using older versions of <em>Optimizely/Episerver</em>, then we will still support those as <a href="https://github.com/Geta/404handler">Geta.404Handler</a>.</p>
+<p>The source code and documentation for the new <em>NotFoundHandler</em> is available on <a href="https://github.com/Geta/geta-notfoundhandler">GitHub</a>.</p>
+]]></description>
+            <link>http://marisks.net/2021/11/04/new-geta-notfoundhandler/</link>
+            <guid isPermaLink="true">http://marisks.net/2021/11/04/new-geta-notfoundhandler/</guid>
+            <pubDate>Thu, 04 Nov 2021 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Managing settings in Episerver project - part 3]]></title>
+            <description><![CDATA[<h1 id="settings-page">Settings page</h1>
+<p>If we look at the single responsibility principle, a start page with settings is doing too much. It has start page related content and also site-wide settings. When you have a large site, the start page becomes a settings page - the primary purpose of it is settings management. But that is not a good approach. The start page should contain only the page related stuff.</p>
+<p>To solve the issue, create a separate page type that has only one purpose - storing settings. You can group settings properties or add local blocks to this page type, as I described in my previous <a href="/2020/02/28/managing-settings-in-episerver-project-2/">article</a>.</p>
+<pre><code class="lang-csharp">[ContentType(GUID = &quot;16BA6D0E-49D1-4A49-95A9-88B7FAE65E63&quot;)]
+public class SettingsPage : PageData
+{
+  [Display(GroupName = GroupNames.Header, Order = 10)]
+  [UIHint(UIHint.Image)]
+  [AllowedTypes(typeof(ImageFile))]
+  public virtual ContentReference CompanyLogo { get; set; }
+
+  [Display(GroupName = GroupNames.Footer, Order = 10)]
+  public virtual LinkBlock Links { get; set; }
+}
+</code></pre>
+<p>Now you can create a page in the root of the site and set required settings. To load and use the page in your code, you can use an extension method from the <a href="https://github.com/Geta/EPi.Extensions"><code>Geta.EPi.Extensions</code> package</a> <code>GetFirstChild</code> or create one:</p>
+<pre><code class="lang-csharp">public static T GetFirstChild&lt;T&gt;
+  this IContentLoader contentLoader, ContentReference contentReference)
+    where T : IContentData
+{
+  return contentLoader.GetChildren&lt;T&gt;(contentReference).FirstOrDefault();
+}
+</code></pre>
+<p>Then in your code, use this extension to load settings from the site root.</p>
+<pre><code class="lang-csharp">var settings = _contentLoader.GetFirstChild&lt;SettingsPage&gt;(ContentReference.StartPage);
+</code></pre>
+<h1 id="multiple-sites">Multiple sites</h1>
+<p>As you have the settings page type already created, you need to create new settings pages on each site. Then when you load the settings by using <code>ContentReference.StartPage</code> in your code, it will load the correct settings page for each of your sites.</p>
+<h1 id="global-settings">Global settings</h1>
+<p>You can use the same approach for global settings. Create a separate page type that will contain global settings. Then create this page in the root of the <em>Episerver</em> instance.</p>
+<p>To load global settings, use <code>ContentReference.RootPage</code> as the settings page parent in <code>GetFirstChild</code> method.</p>
+<pre><code class="lang-csharp">var settings = _contentLoader.GetFirstChild&lt;GlobalSettingsPage&gt;(ContentReference.RootPage);
+</code></pre>
+<h1 id="summary">Summary</h1>
+<p>A custom page type is an excellent tool when you have to separate settings from other site data. You can create a site-specific settings page type, a settings page type that is used in multiple sites, or a page type that is used globally in the whole <em>Episerver</em> instance.</p>
+]]></description>
+            <link>http://marisks.net/2020/03/31/managing-settings-in-episerver-project-3/</link>
+            <guid isPermaLink="true">http://marisks.net/2020/03/31/managing-settings-in-episerver-project-3/</guid>
+            <pubDate>Tue, 31 Mar 2020 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Managing settings in Episerver project - part 2]]></title>
+            <description><![CDATA[<h1 id="grouping-settings-in-tabs">Grouping settings in tabs</h1>
+<p>The easiest way to improve the way how settings are displayed for the users (administrators), is by grouping those in tabs. For example, you have several setting properties on the start page, and those are mixed now with other properties.</p>
+<pre><code class="lang-csharp">[ContentType(GUID = &quot;6C709414-18C6-4E97-9B83-7220FA87D05A&quot;, Order = 10, AvailableInEditMode = true)]
+public class StartPage : PageData
+{
+    [CultureSpecific]
+    public virtual string Header { get; set; }
+
+    public virtual Url FacebookUrl { get; set; }
+}
+</code></pre>
+<p>The <code>Header</code> property, in this example, is displayed on the start page, but <code>FacebookUrl</code> is used for the whole site. So the last one is a setting we would not like to see mixed with start page related stuff in UI.</p>
+<p>By adding the <code>Display</code> attribute and setting <code>GroupName</code> property on it, we will move the setting property to the separate tab in UI.</p>
+<pre><code class="lang-csharp">[ContentType(GUID = &quot;6C709414-18C6-4E97-9B83-7220FA87D05A&quot;, Order = 10, AvailableInEditMode = true)]
+public class StartPage : PageData
+{
+    [CultureSpecific]
+    public virtual string Header { get; set; }
+
+    [Display(GroupName = &quot;Site Settings&quot;)]
+    public virtual Url FacebookUrl { get; set; }
+}
+</code></pre>
+<p>It is also a good approach to extract group name constants into a separate class and add <code>GroupDefinitions</code> attribute so that <em>Episerver</em> will pick it up. For more info, read <a href="https://world.episerver.com/documentation/developer-guides/CMS/Content/grouping-content-types-and-properties/"><em>Episerver</em> documentation</a>.</p>
+<pre><code class="lang-csharp">[GroupDefinitions]
+public static class GroupNames
+{
+    [Display(GroupName = &quot;Site settings&quot;, Order = 10)]
+    public const string SiteSettings = &quot;SiteSettings&quot;;
+}
+</code></pre>
+<h1 id="grouping-settings-with-local-blocks">Grouping settings with local blocks</h1>
+<p>While grouping with a <code>Display</code> attribute allows separating settings in UI, in code, the setting properties are kept together with content properties. One way to work around this issue is by creating blocks and adding those as properties to the start page.</p>
+<p>Create a block first.</p>
+<pre><code class="lang-csharp">[ContentType(GUID = &quot;13304E95-B697-444E-B0D4-F8806B70BF20&quot;)]
+public class SettingsBlock : BlockData
+{
+    public virtual Url FacebookUrl { get; set; }
+}
+</code></pre>
+<p>And then add it to the start page.</p>
+<pre><code class="lang-csharp">[ContentType(GUID = &quot;6C709414-18C6-4E97-9B83-7220FA87D05A&quot;, Order = 10, AvailableInEditMode = true)]
+public class StartPage : PageData
+{
+    [CultureSpecific]
+    public virtual string Header { get; set; }
+
+    [Display(GroupName = GroupNames.SiteSettings)]
+    public virtual SettingsBlock Settings { get; set; }
+}
+</code></pre>
+<p>As you see, I have kept the <code>Display</code> attribute and set <code>GroupName</code> so that the block with settings is still displayed in a separate tab.</p>
+<p>Now, when you need to use settings in your code, you can just pass <code>SettingsBlock</code> around and do not mess with other start page related settings.</p>
+<pre><code class="lang-csharp">var startPage = _contentLoader.Get(ContentReference.StartPage);
+var settings = startPage.Settings;
+
+DoSomething(settings);
+</code></pre>
+<h1 id="summary">Summary</h1>
+<p>As you see, there are some simple ways how to improve settings on your site for both - end-users in UI and developers in code. Though in large projects, it is not enough to add grouping or extract settings into a local block. You might need a more advanced approach. But that&#39;s for another time.</p>
+<p>P.S. Check out <a href="https://talk.alfnilsson.se/2014/04/01/creating-modular-settings-with-blocks/">Alf&#39;s blog</a> about his approach to managing settings.</p>
+]]></description>
+            <link>http://marisks.net/2020/02/28/managing-settings-in-episerver-project-2/</link>
+            <guid isPermaLink="true">http://marisks.net/2020/02/28/managing-settings-in-episerver-project-2/</guid>
+            <pubDate>Fri, 28 Feb 2020 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Managing settings in Episerver project - part 1]]></title>
+            <description><![CDATA[<h1 id="appsettings-in-web-config">appSettings in Web.config</h1>
+<p>In the ASP.NET world (.NET Framework, not Core), the most common place for settings is the <code>appSettings</code> section in the <em>Web.config</em> file. You can configure solution-wide settings here. It is possible to add transformations for different environments where you are deploying the application.</p>
+<p>Also, you can add &quot;partial&quot; settings in a separate file. This is useful when each developer has their own settings. Just add the &quot;partial&quot; file to the <code>.gitignore</code>, and in the <em>Web.config</em> on the <em>appSettings</em> tag, add <code>file</code> attribute that points to your &quot;partial&quot; settings file.</p>
+<pre><code class="lang-xml">&lt;appSettings file=&quot;appSettings.dev.config&quot;&gt;
+  &lt;add key=&quot;MySetting&quot; value=&quot;The configuration&quot;&gt;
+&lt;/appSettings&gt;
+</code></pre>
+<p>Once you configured your application, you can retrieve settings using <code>ConfigurarionManager</code>.</p>
+<pre><code class="lang-csharp">var mySetting = ConfigurationManager.AppSettings[&quot;MySetting&quot;];
+</code></pre>
+<p>It returns a string value. If you need another type, you have to cast to it.</p>
+<h2 id="pros">Pros</h2>
+<ul>
+<li>Built-in ASP.NET feature.</li>
+<li>Easy to use.</li>
+<li>Transformations allow creating separate setting values for different environments.</li>
+</ul>
+<h2 id="cons">Cons</h2>
+<ul>
+<li>Unable to change values in runtime. Requires re-deploy.</li>
+<li>By default, everything is a string. You need to cast to other types.</li>
+<li>Unable to store complex types without serializing to some string format (comma-separated strings, XML, JSON).</li>
+</ul>
+<h1 id="custom-settings-section-in-web-config">Custom settings section in Web.config</h1>
+<p>A custom settings section is a good alternative to <code>appSettings</code>. It is harder to implement and use, but has several benefits over <code>appSettings</code>. With it, you do not mix your settings with other application settings.</p>
+<p>I will not cover creating a custom configuration section here, but Joel Abrahamsson has a excellent article about it: <a href="http://joelabrahamsson.com/creating-a-custom-configuration-section-in-net/">Creating a custom Configuration Section in .NET</a>.</p>
+<h2 id="pros">Pros</h2>
+<ul>
+<li>Built-in ASP.NET feature.</li>
+<li>Separates your settings from other application settings.</li>
+<li>Transformations allow creating separate setting values for different environments.</li>
+<li>You can create complex types using configuration Elements and Collections.</li>
+</ul>
+<h2 id="cons">Cons</h2>
+<ul>
+<li>More complex implementation and usage than <code>appSettings</code>.</li>
+<li>Unable to change values in runtime. Requires re-deploy.</li>
+<li>Properties of the configuration are still just strings, and you need to cast those to other types.</li>
+</ul>
+<h1 id="settings-on-the-start-page">Settings on the Start page</h1>
+<p>It is quite common to use a start page as setting storage in Episerver projects. You can add properties on the start page and configure it to display on the separate tab.</p>
+<pre><code class="lang-csharp">[Display(GroupName = GroupNames.Settings, Order = 100)]
+public virtual ContentReference MyLink { get; set; }
+</code></pre>
+<p>Then you can use Episerver API to load the start page and use the setting.</p>
+<pre><code class="lang-csharp">var startPage = _contentLoader.Get&lt;StartPage&gt;(ContentReference.StartPage);
+var myLink = startPage.MyLink;
+</code></pre>
+<p>When using a start page, you can define properties of any type Episerver has support. You can use integers, strings, content references, or even use blocks for complex types. A full list of supported types can be found here: <a href="https://world.episerver.com/documentation/developer-guides/CMS/Content/Properties/built-in-property-types/">Built-in property types</a>.</p>
+<p>Another advantage of using the start page is UI. You can easily change settings by opening the start page, changing settings, and then publishing the page. For example, it can be used for &quot;feature switching&quot; to enable/disable some functionality on the site.</p>
+<h2 id="pros">Pros</h2>
+<ul>
+<li>Easy to use Episerver API.</li>
+<li>Multi-language settings.</li>
+<li>It can be changed in runtime.</li>
+<li>Configure from UI.</li>
+</ul>
+<h2 id="cons">Cons</h2>
+<ul>
+<li>Environment specific configuration should be configured manually in each environment.</li>
+<li>The start page is not specifically built for settings.</li>
+</ul>
+<h1 id="summary">Summary</h1>
+<p>As you see in this article, each approach for storing and using settings has its advantages and disadvantages. So all approaches also have their use cases.</p>
+<p><code>appSettings</code> and custom configuration sections are great for a configuration that differs by the environment. Also, you would not want to setup settings that often change in <code>Web.config</code>. So this is the right place for settings that are required for 3rd party API integration, some connection details, etc.</p>
+<p>The start page can be used for settings that you might change often or should be changed at runtime. As I mentioned previously, it is the right place for &quot;feature switching.&quot; Also, you would not want to setup settings on the start page when you need those different in different environments.</p>
+<p>The right decision where and how to store settings should be made by a project team depending on requirements.</p>
+<p>In the next article, I will describe other options you can use and better organize settings in Episerver.</p>
+]]></description>
+            <link>http://marisks.net/2020/01/06/managing-settings-in-episerver-project-1/</link>
+            <guid isPermaLink="true">http://marisks.net/2020/01/06/managing-settings-in-episerver-project-1/</guid>
+            <pubDate>Mon, 06 Jan 2020 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Getting promotion value from the order]]></title>
+            <description><![CDATA[<p><code>IOrderForm</code> has a property with all promotions applied to the order. Each promotion record provides information about the saved monetary amount, about the type of the reward, has a reference to the promotion data and more information. But it lacks information about the percentage value of promotion if a promotion&#39;s type is a percentage.</p>
+<p>The only way to get the percentage value of the promotion is by loading the promotion by a reference and then getting its value.</p>
+<pre><code class="lang-csharp">public static decimal GetDiscountValue(this PromotionInformation promotionInfo, IContentLoader contentLoader)
+{
+    if (promotionInfo.RewardType != RewardType.Percentage)
+    {
+        return promotionInfo.SavedAmount;
+    }
+
+    if (contentLoader.TryGet&lt;PromotionData&gt;(promotionInfo.PromotionGuid, out var promotion)
+        &amp;&amp; promotion is IMonetaryDiscount monetaryDiscount)
+    {
+        return monetaryDiscount.Discount.Percentage;
+    }
+
+    return promotionInfo.SavedAmount;
+}
+</code></pre>
+<p>Here I have created an extension method to get the correct value based on a reward type. When the reward type is not a percentage, return saved amount value from the promotion. Otherwise, load the promotion and return percentage value. Only the promotion of <code>IMonetaryDiscount</code> can have a percentage value.</p>
+<p>Now you can use this method to get a percentage or monetary value like this:</p>
+<pre><code class="lang-csharp">public void WorkOnPromotionValue(IOrderForm orderForm, IContentLoader contentLoader)
+{
+    var promotion = orderForm.Promotions.First();
+    var value = promotion.GetDiscountValue(contentLoader);
+
+    if (promotion.RewardType == RewardType.Percentage)
+    {
+        var percentage = value;
+        // Do some work with percentage ...
+    }
+    else
+    {
+        var money = value;
+        // Do some work with money ...
+    }
+}
+</code></pre>
+<p>It would be much better if Episerver would store percentage value in the order too. Promotions might be removed, and it will not be possible to get the percentage value anymore. And promotions are removed quite often as too many promotions severely affect the site&#39;s performance when calculating discounted price.</p>
+]]></description>
+            <link>http://marisks.net/2019/10/23/getting-promotion-value-from-order/</link>
+            <guid isPermaLink="true">http://marisks.net/2019/10/23/getting-promotion-value-from-order/</guid>
+            <pubDate>Wed, 23 Oct 2019 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[A more flexible way to hide category property in Episerver]]></title>
+            <description><![CDATA[<p>In <em>Episerver</em> you can hide properties in edit mode using a <code>ScaffoldColumn</code> attribute by using it like this:</p>
+<pre><code class="lang-csharp">[ScaffoldColumn(false)]
+</code></pre>
+<p>This does not work for the <code>Category</code> property though. To fix it, you can add an editor descriptor similar to <em>Joel&#39;s</em> but instead of filtering on content types, filter on <code>ScaffoldColumn</code> and use its <code>Scaffold</code> value:</p>
+<pre><code class="lang-csharp">[EditorDescriptorRegistration(TargetType = typeof (CategoryList))]
+public class HideCategoryEditorDescriptor : EditorDescriptor
+{
+    public override void ModifyMetadata(
+        ExtendedMetadata metadata,
+        IEnumerable&lt;Attribute&gt; attributes)
+    {
+        var attrs = attributes as Attribute[] ?? attributes.ToArray();
+        base.ModifyMetadata(metadata,  attrs);
+
+        if (metadata.PropertyName != &quot;icategorizable_category&quot;) return;
+
+        var scaffoldAttribute =
+            attrs
+            .SafeOfType&lt;ScaffoldColumnAttribute&gt;()
+            .FirstOrDefault();
+        if (scaffoldAttribute == null) return;
+
+        metadata.ShowForEdit = scaffoldAttribute.Scaffold;
+    }
+}
+</code></pre>
+<p><em>NOTE: I am using <code>SafeOfType</code> extension method from the <a href="https://nuget.episerver.com/package/?id=Geta.Net.Extensions">Geta.Net.Extensions</a> library.</em></p>
+<p>Now you can use <code>ScaffoldColumn</code> to control the visibility of the <code>Category</code> property.</p>
+<pre><code class="lang-csharp">[ScaffoldColumn(false)]
+public override CategoryList Category { get; set; }
+</code></pre>
+<p>Here I am overriding a category property from the base class and applying the attribute.</p>
+]]></description>
+            <link>http://marisks.net/2019/08/02/hiding-category-property/</link>
+            <guid isPermaLink="true">http://marisks.net/2019/08/02/hiding-category-property/</guid>
+            <pubDate>Fri, 02 Aug 2019 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Promotion exclusion levels in Episerver Commerce]]></title>
+            <description><![CDATA[<h1 id="the-issue">The issue</h1>
+<p>We have item level discounts on two categories where one category has a 30% discount and the second one has a 50% discount. Then we defined an order level discount of 40% when a coupon code is applied. The order of discounts is 50% -&gt; 40% -&gt; 30%.</p>
+<p>When we tried to add products from both categories and then apply a coupon code, we got a validation error that it is an invalid discount combination.</p>
+<h1 id="the-research-and-the-solution">The research and the solution</h1>
+<p>Episerver support sent us a <em>Quicksilver</em> example where this setup worked but with a small difference - 40% discount was an item level discount. We tried to re-create the same setup, but it still did not work.</p>
+<p>After some research, I found that Episerver support changed Quicksilver code, which applies discounts. They have changed the exclusion level from <code>Order</code> to <code>Unit</code> when calling <code>ApplyDiscounts</code> on the cart.</p>
+<pre><code class="lang-csharp">cart.ApplyDiscounts(_promotionEngine, new PromotionEngineSettings
+{
+    ExclusionLevel = ExclusionLevel.Unit
+});
+</code></pre>
+<p>The default value for <code>ExclusionLevel</code> is <code>Order</code>. So the combination we tried to apply didn&#39;t work. Strangely, this is a default value as such discount combinations are common in e-commerce solutions.</p>
+<p>So if you need control of combining different discounts on item level, always use <code>ExclusionLevel.Unit</code>.</p>
+<p>Thanks to Cuong Phan from Episerver support for help!</p>
+]]></description>
+            <link>http://marisks.net/2019/06/18/promotion-exclusion-levels-in-episerver-commerce/</link>
+            <guid isPermaLink="true">http://marisks.net/2019/06/18/promotion-exclusion-levels-in-episerver-commerce/</guid>
+            <pubDate>Tue, 18 Jun 2019 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Episerver: starting a Scheduled Job programmatically]]></title>
+            <description><![CDATA[<p>While <em>Episerver&#39;s</em> async methods for starting a scheduled job do not work well, there is a workaround. You can schedule the job to run later. Then the scheduler will pick up the job and start it.</p>
+<p>Here I have created an extension method to schedule the job to run after ten seconds.</p>
+<pre><code class="lang-csharp">public static class ScheduledJobExtensions
+{
+    public static void ScheduleRunNow(
+      this ScheduledJob job, IScheduledJobRepository scheduledJobRepository)
+    {
+        job.IntervalType = ScheduledIntervalType.None;
+        job.IntervalLength = 0;
+        job.IsEnabled = true;
+        job.NextExecution = DateTime.Now.AddSeconds(10);
+
+        scheduledJobRepository.Save(job);
+    }
+}
+</code></pre>
+<p>You can use this extension method like this:</p>
+<pre><code class="lang-csharp">var job = _scheduledJobRepository.Get(new Guid(MyJob.Guid));
+job.ScheduleRunNow(_scheduledJobRepository);
+</code></pre>
+]]></description>
+            <link>http://marisks.net/2019/04/23/episerver-starting-scheduled-job-programmatically/</link>
+            <guid isPermaLink="true">http://marisks.net/2019/04/23/episerver-starting-scheduled-job-programmatically/</guid>
+            <pubDate>Tue, 23 Apr 2019 00:00:00 GMT</pubDate>
+        </item>
+        <item>
+            <title><![CDATA[Investigating missing products in content areas]]></title>
+            <description><![CDATA[<p>After research, we found that it was caused by the import changing content GUIDs on products. It caused other issues too. In this article, I do not want to go into the details of that issue but cover how products are linked in content areas.</p>
+<p>With a few SQL scripts, you can get all you need. The first thing to find out is the ID of the content area property. You can find it in the <code>tblPropertyDefinition</code> by querying it on <code>fkContentTypeID</code> column (if you do not know the ID of the content type, find it in the <code>tblContentType</code> table).</p>
+<pre><code class="lang-sql">SELECT *
+  FROM [dbo].[tblPropertyDefinition]
+  where fkContentTypeID = 100
+</code></pre>
+<p>In the results, find your property and use it&#39;s <code>pkID</code> value in the next query.</p>
+<p>In the <code>tblContentProperty</code> table, <em>Episerver</em> stores values of all properties. You can easily get values for all properties by querying by content ID on the <code>fkContentID</code> column and property definition ID on the <code>fkPropertyDefinitionID</code> column (the value you get in the previous step). The easiest way to get a content ID is by going into the Episerver edit mode and check the ID under the content properties.</p>
+<p><img src="/img/2019-02/content-id-in-edit.jpg" class="img-responsive" alt="Content ID in the edit mode."></p>
+<p>Once you get all IDs, run the query. To get values of a content area, you should look into <code>LongString</code> column.</p>
+<pre><code class="lang-sql">SELECT [LongString]
+  FROM [dbo].[tblContentProperty]
+  where fkPropertyDefinitionID = 800 and fkContentID = 9000
+</code></pre>
+<p>Episerver stores content area data in an <code>XML</code> format which looks like <code>Html</code>. Each item in the content area is represented as a <code>DIV</code> tag with some attributes. I was interested only in two - <code>data-contentguid</code> and <code>data-contentname</code>. The first attribute is a GUID which links to the content in the content area and the second helps to identify an item by the name.</p>
+<pre><code class="lang-html">&lt;div
+    data-classid=&quot;36f4349b-8093-492b-b616-05d8964e4c89&quot;
+    data-contentgroup=&quot;&quot;
+    data-contentguid=&quot;00000000-0000-1234-0000-000000010000&quot;
+    data-contentname=&quot;Fancy stuff&quot;&gt;{}&lt;/div&gt;
+</code></pre>
+<p>In our case, product GUIDs were generated in a specific format and those where changing in some cases. In this example, it would be <code>1234</code> part. Once we found the issues in IDs, we could easily fix it with a script.</p>
+<pre><code class="lang-sql">UPDATE tblContentProperty
+SET LongString = REPLACE(LongString, &#39;00000000-0000-1234-0000-&#39;, &#39;00000000-0000-0000-0000-&#39;)
+</code></pre>
+<p>I know that it might be dangerous to modify Episerver DB directly, but we haven&#39;t risked much as products in content areas were not visible anyway. Luckily, this fixed our issues.</p>
+<p>There is another table which might be useful when researching issues with content areas. It is <code>tblContentSoftlink</code> table.</p>
+<pre><code class="lang-sql">SELECT *
+  FROM [dbo].[tblContentSoftlink]
+  where fkReferencedContentGUID = &#39;00000000-0000-1234-0000-000000010000&#39;
+</code></pre>
+<p>There is one important column in this table - <code>ContentLink</code>. You can find a matching content link for a content GUID in it. In our case, we still saw a content link and it was a valid one - the content existed in the DB. But once we edited content in the edit mode without touching our content area, the content link became empty. The data in the content area still remained (in the <code>tblContentProperty</code> table).</p>
+]]></description>
+            <link>http://marisks.net/2019/02/28/investigating-missing-products-in-content-areas/</link>
+            <guid isPermaLink="true">http://marisks.net/2019/02/28/investigating-missing-products-in-content-areas/</guid>
+            <pubDate>Thu, 28 Feb 2019 00:00:00 GMT</pubDate>
+        </item>
+    </channel>
+</rss>

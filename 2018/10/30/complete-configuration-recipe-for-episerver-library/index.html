@@ -1,0 +1,217 @@
+<!DOCTYPE html><!--if lt IE 8html.no-js.lt-ie9.lt-ie8(lang="en")--><!--if IE 8html.no-js.lt-ie9(lang="en")--><!--if gt IE 8html.no-js(lang="en")--><head><meta charset="utf-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><title>A complete configuration recipe for Episerver library | marisks # code</title><meta name="description" content="In the previous two articles, I described how to use different techniques for Episerver library configuration. Now it's time to wrap it in a complete solution."><meta name="keywords" content=".NET, ASP.NET, C#, JavaScript, Optimizely, EPiServer, programming languages"><meta name="viewport" content="width=device-width, initial-scale=1"><!--Place favicon.ico and apple-touch-icon.png in the root directory--><meta name="generator" content="DocPad v6.79.4" /><!-- Google Tag Manager--><script async src="https://www.googletagmanager.com/gtag/js?id=G-540M01NJGH"></script><script>window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-540M01NJGH');</script><!-- End Google Tag Manager--><link rel="icon" sizes="16x16 32x32" href="/favicon.ico?v=1"><link  rel="stylesheet" href="/css/vendor/normalize.css" /><link  rel="stylesheet" href="/css/vendor/main.css" /><link  rel="stylesheet" href="/css/vendor/bootstrap.min.css" /><link  rel="stylesheet" href="//netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css" /><link  rel="stylesheet" href="/css/style.css" /><script src="/js/vendor/modernizr-2.6.2.min.js"></script></head><body><!-- Google Tag Manager--><noscript><iframe src="//www.googletagmanager.com/ns.html?id=GTM-WDKMR7" height="0" width="0" style="display: none; visibility: hidden;"></iframe></noscript><!-- End Google Tag Manager--><!--if lt IE 8p.browsehappy
+    |You are using an
+    strong
+        |outdated browser
+    |. Please
+    a(href="http://browsehappy.com/")
+        |upgrade your browser
+    |to improve your experience.
+--><div id="wrap"><div role="navigation" class="navbar navbar-ornament navbar-fixed-top"><div class="container"><div class="navbar-header"><a href="/" class="navbar-brand">marisks # code</a></div></div></div><div class="container"><div class="row"><div class="col-sm-8"><article><header><h1>A complete configuration recipe for Episerver library</h1><p class="meta"><time datetime="2018-10-30T00:00:00.000Z">Tue Oct 30 2018</time></p></header><div class="lead"><p>In the previous two articles, I described how to use different techniques for Episerver library configuration. Now it&#39;s time to wrap it in a complete solution.</p>
+
+</div><h2 id="introduction">Introduction</h2>
+<p>I have created an example library to show how the configuration should be set up. The library adds <em>Episerver</em> content event logging. A library user can configure the log level and to which events to subscribe (it supports two events in an example).</p>
+<h2 id="library-implementation">Library implementation</h2>
+<p>First of all, let&#39;s create the functionality of our library. I am creating a class which logs an event using <em>Episerver</em> logging. It has two parameters - the name of an event and <em>ContentEventArgs</em> arguments, and it logs the provided information.</p>
+<pre><code class="lang-csharp">public class ContentEventLogger
+{
+    private readonly ILogger _logger = LogManager.GetLogger(typeof(ContentEventLogger));
+
+    public virtual void Log(string name, ContentEventArgs args)
+    {
+        _logger.Log(Level.Information, $&quot;Event: {name}; Content: {args.Content?.Name}&quot;);
+    }
+}
+</code></pre>
+<p>The requirements stated that we should be able to change the log level by some configuration. For this purpose, I am creating a settings class and inject it in our logger.</p>
+<pre><code class="lang-csharp">public class LoggerSettings
+{
+    public LoggerSettings()
+    {
+        Level = Level.Information;
+    }
+
+    public Level Level { get; private set; }
+
+    public LoggerSettings LogLevel(Level level)
+    {
+        return new LoggerSettings { Level = level };
+    }
+}
+
+public class ContentEventLogger
+{
+    private readonly LoggerSettings _settings;
+    private readonly ILogger _logger = LogManager.GetLogger(typeof(ContentEventLogger));
+
+    public ContentEventLogger(LoggerSettings settings)
+    {
+        _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+    }
+
+    public virtual void Log(string name, ContentEventArgs args)
+    {
+        _logger.Log(_settings.Level, $&quot;Event: {name}; Content: {args.Content?.Name}&quot;);
+    }
+}
+</code></pre>
+<h2 id="library-s-settings-configuration">Library&#39;s settings configuration</h2>
+<p>Now we provided settings of our logger through dependency injection. However, how to configure it so that settings are injected, and it is simple enough for our library users?</p>
+<p><em>Episerver</em> has an API for dependency injection configuration. We can use it to register our settings and our logger in an <em>IConfigurableModule</em>.</p>
+<pre><code class="lang-csharp">public void ConfigureContainer(ServiceConfigurationContext context)
+{
+    var settings = new LoggerSettings();
+    context.Services.AddSingleton(settings);
+    context.Services.AddSingleton&lt;ContentEventLogger&gt;();
+}
+</code></pre>
+<p>While this works, the question is who is responsible for this registration. If we create an <em>IConfigurableModule</em> in our library, then the user will not be able to set the settings they need. If we make the user responsible for all registrations, the user will need proper documentation to not mess up with it. In this example, the configuration is simple, but what would happen if the user has to register ten or more services?</p>
+<p>The solution is in the middle. We can provide a simple API for the user to configure the library in their <em>IConfigurableModule</em> but same time without too many details.</p>
+<p>For this purpose, I am creating several extension methods for <em>ServiceConfigurationContext</em>. There is one extension method which uses default configuration and the second one which allows setting log level you want. Notice that I prefixed extension methods with <em>Add</em>. This approach is a convention used in <em>ASP.NET Core</em>.</p>
+<pre><code class="lang-csharp">public static void AddContentEventLogger(
+    this ServiceConfigurationContext context)
+{
+    context.AddContentEventLogger(_ =&gt; _);
+}
+
+public static void AddContentEventLogger(
+    this ServiceConfigurationContext context,
+     Func&lt;LoggerSettings, LoggerSettings&gt; configure)
+{
+    var settings = configure(new LoggerSettings());
+
+    context.Services.AddSingleton(settings);
+    context.Services.AddSingleton&lt;ContentEventLogger&gt;();
+}
+</code></pre>
+<p>With these extension methods, the user can register our logger in their <em>IConfigurableModule</em>.</p>
+<pre><code class="lang-csharp">public void ConfigureContainer(ServiceConfigurationContext context)
+{
+    context.AddContentEventLogger();
+
+    // or
+
+    context.AddContentEventLogger(x =&gt; x.LogLevel(Level.Error));
+}
+</code></pre>
+<h2 id="initialization-configuration">Initialization configuration</h2>
+<p>While we have implemented our logging functionality, it is not used anywhere. We have to attach it to <em>Episerver</em> events. So we need some initialization logic.</p>
+<p>Again, we can create an initialization module in our library and attach to the events but this way our library user loses control. They are not able to configure to which events to attach.</p>
+<p>Instead, let&#39;s create a particular class for our library initialization for which we provide additional settings.</p>
+<pre><code class="lang-csharp">public enum ContentEvent
+{
+    Created,
+    Published
+}
+
+public class InitializerSettings
+{
+    public IEnumerable&lt;ContentEvent&gt; Events { get; private set; }
+
+    public InitializerSettings()
+    {
+        Events = Enumerable.Empty&lt;ContentEvent&gt;();
+    }
+
+    public InitializerSettings SubscribeTo(ContentEvent contentEvent)
+    {
+        return new InitializerSettings
+        {
+            Events = Events.Union(new [] {contentEvent})
+        };
+    }
+}
+
+public class Initializer
+{
+    private readonly IContentEvents _contentEvents;
+    private readonly ContentEventLogger _logger;
+
+    public Initializer(
+        IContentEvents contentEvents,
+        ContentEventLogger logger)
+    {
+        _contentEvents = contentEvents ?? throw new ArgumentNullException(nameof(contentEvents));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    }
+
+    public void Initialize(InitializerSettings settings)
+    {
+        foreach (var contentEvent in settings.Events)
+        {
+            Subscribe(contentEvent);
+        }
+    }
+
+    private void Subscribe(ContentEvent contentEvent)
+    {
+        switch (contentEvent)
+        {
+            case ContentEvent.Created:
+                _contentEvents.CreatedContent += _contentEvents_CreatedContent;
+                break;
+            case ContentEvent.Published:
+                _contentEvents.PublishedContent += _contentEvents_PublishedContent;
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(contentEvent), contentEvent, null);
+        }
+    }
+
+    private void _contentEvents_PublishedContent(object sender, ContentEventArgs e)
+    {
+        _logger.Log(&quot;Published&quot;, e);
+    }
+
+    private void _contentEvents_CreatedContent(object sender, ContentEventArgs e)
+    {
+        _logger.Log(&quot;Created&quot;, e);
+    }
+}
+</code></pre>
+<p>By calling <em>Initialize</em> and providing settings, we can attach to different (or multiple) events. As with dependency injection configuration, we can add a helper extension method. Notice that for this extension method I used <em>Use</em> prefix. Also, same as in <em>ASP.NET Core</em>.</p>
+<pre><code class="lang-csharp">public static void UseContentEventLogger(
+  this InitializationEngine context, Func&lt;InitializerSettings, InitializerSettings&gt; configure)
+{
+  var settings = configure(new InitializerSettings());
+
+  var initializer = context.Locate.Advanced.GetInstance&lt;Initializer&gt;();
+  initializer.Initialize(settings);
+}
+</code></pre>
+<p>Besides, do not forget to register our initializer in a container with <em>AddContentEventLogger</em> extension method.</p>
+<pre><code class="lang-csharp">public static void AddContentEventLogger(
+  this ServiceConfigurationContext context, Func&lt;LoggerSettings, LoggerSettings&gt; configure)
+{
+  var settings = configure(new LoggerSettings());
+
+  context.Services.AddSingleton(settings);
+  context.Services.AddSingleton&lt;ContentEventLogger&gt;();
+
+  context.Services.AddSingleton&lt;Initializer&gt;();
+}
+</code></pre>
+<p>Once this is done, the user can attach to the different events in their <em>IInitializableModule</em>.</p>
+<pre><code class="lang-csharp"> public void Initialize(InitializationEngine context)
+{
+  context.UseContentEventLogger(
+      x =&gt; x
+          .SubscribeTo(ContentEvent.Created)
+          .SubscribeTo(ContentEvent.Published));
+}
+</code></pre>
+<h2 id="summary">Summary</h2>
+<p>Providing configuration options for your library users is important. However, it is also important to have a good API. By following <em>ASP.NET Core</em> example, we can create nice configuration API for <em>Episerver</em> too.</p>
+<p>For the full example, check <a href="https://github.com/marisks/examples/tree/master/ContentEventLogger">GitHub</a>.</p>
+<p># configuring!</p>
+</article><div id="disqus_thread"></div><script>/* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+var disqus_shortname = 'marisksblog'; // required: replace example with your forum shortname
+
+/* * * DON'T EDIT BELOW THIS LINE * * */
+(function() {
+  var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+  dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+  (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();</script><noscript>Please enable JavaScript to view the<a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a><a href="http://disqus.com" class="dsq-brlink">comments powered by<span class="logo-disqus">Disqus</span></a></noscript></div><div class="col-sm-1"><aside class="archive"><ul class="nav"><li><a href="/">2021</a></li><li><a href="/2020/">2020</a></li><li><a href="/2019/">2019</a></li><li class="active"><a href="/2018/">2018</a></li><li><a href="/2017/">2017</a></li><li><a href="/2016/">2016</a></li><li><a href="/2015/">2015</a></li><li><a href="/2014/">2014</a></li><li><a href="/2013/">2013</a></li><li><a href="/2012/">2012</a></li></ul></aside></div><div class="col-sm-3"><aside class="panel panel-default"><div class="panel-body"><div class="about"><img src="/img/common/profile_0021.jpg" alt="profile picture" class="center-block img-responsive thumbnail"><p>Hi! I'm Māris Krivtežs. I am Web developer primarily working with ASP.NET, EPiServer and front-end development at&nbsp;<a href="http://geta.no" target="_blank">Geta</a>, but same time learning different programming languages, learning new programming paradigms, architectures, and design. I spend my free time with my family, reading books, bicycling and traveling.</p></div><ul class="social"><li><a href="http://stackoverflow.com/users/660154/marisks" target="_blank"><i class="fa fa-stack-overflow"></i></a></li><li><a href="https://github.com/marisks" target="_blank"><i class="fa fa-github-alt"></i></a></li><li><a href="https://twitter.com/pioners1001" target="_blank"><i class="fa fa-twitter"></i></a></li><li><a href="http://www.linkedin.com/pub/maris-krivtezs/31/98b/b53" target="_blank"><i class="fa fa-linkedin"></i></a></li><li><a href="/rss.xml" target="_blank"><i class="fa fa-rss"></i></a></li></ul><a href="https://getadigital.com" target="_blank"><img src="/img/common/ident-geta-wordmark.svg" alt="Geta logo" class="center-block img-responsive aside-logo"></a></div></aside></div></div></div></div><div id="footer"><div class="container"><div class="container credit">Copyright &copy; 2017 Maris Krivtezs. All Rights Reserved, except for the parts enumerated below:<ul class="licence-list"><li>- The source code examples on this blog are covered by&nbsp;<a href="https://opensource.org/licenses/mit-license.php">MIT License</a>.</li><li>- This page content, excluding the visual design and the logotype, is covered by&nbsp;<a href="http://creativecommons.org/licenses/by/4.0/">Creative Commons Attribution 4.0 International License</a>.</li></ul></div></div></div><script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><script>window.jQuery || document.write('<script src="/js/vendor/jquery-1.10.2.min.js"><\/script>')</script><script  src="/bower_components/bootstrap/dist/js/bootstrap.min.js"></script><script  src="/js/plugins.js"></script><script  src="/js/main.js"></script></body>

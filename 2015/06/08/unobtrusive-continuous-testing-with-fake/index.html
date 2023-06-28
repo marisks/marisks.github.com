@@ -1,0 +1,76 @@
+<!DOCTYPE html><!--if lt IE 8html.no-js.lt-ie9.lt-ie8(lang="en")--><!--if IE 8html.no-js.lt-ie9(lang="en")--><!--if gt IE 8html.no-js(lang="en")--><head><meta charset="utf-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><title>Unobtrusive continuous testing with FAKE | marisks # code</title><meta name="description" content="When unit testing I want to get feedback from my tests fast - usually on build. The technique is called Continuous test-driven development or just 'Continuous testing'. There are available several tools for it, but I wanted to try FAKE."><meta name="keywords" content=".NET, ASP.NET, C#, JavaScript, Optimizely, EPiServer, programming languages"><meta name="viewport" content="width=device-width, initial-scale=1"><!--Place favicon.ico and apple-touch-icon.png in the root directory--><meta name="generator" content="DocPad v6.79.4" /><!-- Google Tag Manager--><script async src="https://www.googletagmanager.com/gtag/js?id=G-540M01NJGH"></script><script>window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-540M01NJGH');</script><!-- End Google Tag Manager--><link rel="icon" sizes="16x16 32x32" href="/favicon.ico?v=1"><link  rel="stylesheet" href="/css/vendor/normalize.css" /><link  rel="stylesheet" href="/css/vendor/main.css" /><link  rel="stylesheet" href="/css/vendor/bootstrap.min.css" /><link  rel="stylesheet" href="//netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css" /><link  rel="stylesheet" href="/css/style.css" /><script src="/js/vendor/modernizr-2.6.2.min.js"></script></head><body><!-- Google Tag Manager--><noscript><iframe src="//www.googletagmanager.com/ns.html?id=GTM-WDKMR7" height="0" width="0" style="display: none; visibility: hidden;"></iframe></noscript><!-- End Google Tag Manager--><!--if lt IE 8p.browsehappy
+    |You are using an
+    strong
+        |outdated browser
+    |. Please
+    a(href="http://browsehappy.com/")
+        |upgrade your browser
+    |to improve your experience.
+--><div id="wrap"><div role="navigation" class="navbar navbar-ornament navbar-fixed-top"><div class="container"><div class="navbar-header"><a href="/" class="navbar-brand">marisks # code</a></div></div></div><div class="container"><div class="row"><div class="col-sm-8"><article><header><h1>Unobtrusive continuous testing with FAKE</h1><p class="meta"><time datetime="2015-06-08T00:00:00.000Z">Mon Jun 08 2015</time></p></header><div class="lead"><p>When unit testing I want to get feedback from my tests fast - usually on build. The technique is called <a href="http://en.wikipedia.org/wiki/Continuous_test-driven_development">Continuous test-driven development</a> or just &#39;Continuous testing&#39;. There are available several tools for it, but I wanted to try FAKE.</p>
+
+</div><p>Previously I have tried different tools for continuous testing. Probably most advanced one is <a href="http://www.ncrunch.net/">NCrunch</a>, but it is also quite expensive. I also tried <a href="http://www.continuoustests.com/">ContinuousTests</a>, but it had several bugs running my builds and tests. There is also <a href="http://codereflection.github.io/Giles/">Giles</a> I haven&#39;t tried.</p>
+<p>For long period I have used <em>Visual Studio Ultimate</em> <em>Test Explorer&#39;s</em> feature running tests on build (see image below), but unfortunately it is not available in <em>Visual Studio Professional</em> I have now.</p>
+<p><img src="/img/2015-06/test_explorer.png" alt="Visual Studio Ultimate 2013/2015 Test Explorer with run tests on build button." class="img-responsive"></p>
+<p>So as I am learning <em>F#</em> I decided to try <a href="http://fsharp.github.io/FAKE/">FAKE</a>.</p>
+<p>I did not want to install <em>FAKE</em> in my team&#39;s project to not bother other team members who might not want to use <em>FAKE</em> to run tests. One way is to add <em>FAKE</em> project&#39;s folder into ignore list of your repository, but it will require to change <em>.gitignore</em> file for the project, so it is not a solution. Another way is to put your <em>FAKE</em> project beside team&#39;s project.</p>
+<p>The easiest way to start with <em>FAKE</em> is just creating new <em>F#</em> library or console application project and install <em>FAKE</em> <em>NuGet</em> package.</p>
+<pre><code>Install-Package FAKE
+</code></pre><p>I am using <em>xUnit 2</em> and I need test runner for it, so install console runner.</p>
+<pre><code>Install-Package xunit.runner.console -Version 2.0.0
+</code></pre><p>Following <a href="http://fsharp.github.io/FAKE/gettingstarted.html">Getting started tutorial</a> create <em>build.bat</em> file for running <em>FAKE</em> script. Just use proper <em>FAKE</em> version in the path.</p>
+<pre><code>@echo off
+cls
+&quot;..\packages\FAKE.3.34.7\tools\Fake.exe&quot; build.fsx
+pause
+</code></pre><p>And then create <em>build.fsx</em> script which references <em>FAKE</em> library and opens <em>FAKE</em> namespaces. For <em>xUnit 2</em> I had to include <em>Fake.Testing</em> namespace.</p>
+<pre><code>#r @&quot;../packages/FAKE.3.34.7/tools/FakeLib.dll&quot;
+open Fake
+open Fake.Testing
+</code></pre><p>Then create function which will run tests.</p>
+<pre><code>let testDir  = &quot;../../TeamProject/TeamProject.Tests/bin/Debug/&quot;
+
+let runTests () =
+    tracefn &quot;Running tests...&quot;
+    !! (testDir @@ &quot;*.Tests.dll&quot;)
+    |&gt; xUnit2 (fun p -&gt; {
+                        p with HtmlOutputPath = Some(testDir @@ &quot;xunit.html&quot;);
+                               ToolPath = @&quot;../packages/xunit.runner.console.2.0.0/tools/xunit.console.exe&quot;
+                        })
+</code></pre><p>By convention it will run all tests in <em>.Tests.dll</em> libraries. <em>testDir</em> is relative directory to the test project&#39;s build output. I also had to provide test runner path in <em>XUnit2Params</em>.</p>
+<p>Next I had to define <em>Watch</em> task which will look for changes in test project&#39;s build output and run tests. Unfortunately there is an <a href="https://github.com/fsharp/FAKE/issues/780">issue</a> with <em>FAKE&#39;s</em> <em>Watch</em> that it works only with absolute paths. To get the full path from relative one I had to cuse <em>System.IO.Path.GetFullPath</em> function.</p>
+<pre><code>let fullDir = System.IO.Path.GetFullPath testDir
+Target &quot;Watch&quot; (fun _ -&gt;
+    use watcher = !! (fullDir @@ &quot;*.*&quot;) |&gt; WatchChanges (fun changes -&gt;
+        runTests()
+    )
+    System.Console.ReadLine() |&gt; ignore
+    watcher.Dispose()
+)
+</code></pre><p>It is also good to run tests in the beginning, so create separate task for it.</p>
+<pre><code>Target &quot;Test&quot; (fun _ -&gt;
+    runTests()
+)
+</code></pre><p>And the last step - create default target, configure order of targets and run.</p>
+<pre><code>// Default target
+Target &quot;Default&quot; (fun _ -&gt;
+    trace &quot;The end.&quot;
+)
+
+&quot;Test&quot;
+==&gt; &quot;Watch&quot;
+==&gt; &quot;Default&quot;
+
+RunTargetOrDefault &quot;Default&quot;
+</code></pre><p>Script should be run from directory it relies. After running script first it will run tests and then it will start watching for test <em>dll</em> changes. After you change your tests and build the project, <em>FAKE</em> will run tests again.</p>
+</article><div id="disqus_thread"></div><script>/* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+var disqus_shortname = 'marisksblog'; // required: replace example with your forum shortname
+
+/* * * DON'T EDIT BELOW THIS LINE * * */
+(function() {
+  var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+  dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+  (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();</script><noscript>Please enable JavaScript to view the<a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a><a href="http://disqus.com" class="dsq-brlink">comments powered by<span class="logo-disqus">Disqus</span></a></noscript></div><div class="col-sm-1"><aside class="archive"><ul class="nav"><li><a href="/">2021</a></li><li><a href="/2020/">2020</a></li><li><a href="/2019/">2019</a></li><li><a href="/2018/">2018</a></li><li><a href="/2017/">2017</a></li><li><a href="/2016/">2016</a></li><li class="active"><a href="/2015/">2015</a></li><li><a href="/2014/">2014</a></li><li><a href="/2013/">2013</a></li><li><a href="/2012/">2012</a></li></ul></aside></div><div class="col-sm-3"><aside class="panel panel-default"><div class="panel-body"><div class="about"><img src="/img/common/profile_0021.jpg" alt="profile picture" class="center-block img-responsive thumbnail"><p>Hi! I'm Māris Krivtežs. I am Web developer primarily working with ASP.NET, EPiServer and front-end development at&nbsp;<a href="http://geta.no" target="_blank">Geta</a>, but same time learning different programming languages, learning new programming paradigms, architectures, and design. I spend my free time with my family, reading books, bicycling and traveling.</p></div><ul class="social"><li><a href="http://stackoverflow.com/users/660154/marisks" target="_blank"><i class="fa fa-stack-overflow"></i></a></li><li><a href="https://github.com/marisks" target="_blank"><i class="fa fa-github-alt"></i></a></li><li><a href="https://twitter.com/pioners1001" target="_blank"><i class="fa fa-twitter"></i></a></li><li><a href="http://www.linkedin.com/pub/maris-krivtezs/31/98b/b53" target="_blank"><i class="fa fa-linkedin"></i></a></li><li><a href="/rss.xml" target="_blank"><i class="fa fa-rss"></i></a></li></ul><a href="https://getadigital.com" target="_blank"><img src="/img/common/ident-geta-wordmark.svg" alt="Geta logo" class="center-block img-responsive aside-logo"></a></div></aside></div></div></div></div><div id="footer"><div class="container"><div class="container credit">Copyright &copy; 2017 Maris Krivtezs. All Rights Reserved, except for the parts enumerated below:<ul class="licence-list"><li>- The source code examples on this blog are covered by&nbsp;<a href="https://opensource.org/licenses/mit-license.php">MIT License</a>.</li><li>- This page content, excluding the visual design and the logotype, is covered by&nbsp;<a href="http://creativecommons.org/licenses/by/4.0/">Creative Commons Attribution 4.0 International License</a>.</li></ul></div></div></div><script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><script>window.jQuery || document.write('<script src="/js/vendor/jquery-1.10.2.min.js"><\/script>')</script><script  src="/bower_components/bootstrap/dist/js/bootstrap.min.js"></script><script  src="/js/plugins.js"></script><script  src="/js/main.js"></script></body>

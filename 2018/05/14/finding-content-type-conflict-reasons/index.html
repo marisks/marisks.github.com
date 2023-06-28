@@ -1,0 +1,225 @@
+<!DOCTYPE html><!--if lt IE 8html.no-js.lt-ie9.lt-ie8(lang="en")--><!--if IE 8html.no-js.lt-ie9(lang="en")--><!--if gt IE 8html.no-js(lang="en")--><head><meta charset="utf-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><title>Finding content type conflict reasons | marisks # code</title><meta name="description" content="Episerver Developer Tools are useful for finding issues in your project/website. There is a tab - &quot;Content Type Analyzer&quot; which displays the details of your content types. In some projects you may notice that some types have issues with synchronization - SynchronizationStatus has value &quot;Conflict,&quot; but it does not provide any hint about the reason for the conflict."><meta name="keywords" content=".NET, ASP.NET, C#, JavaScript, Optimizely, EPiServer, programming languages"><meta name="viewport" content="width=device-width, initial-scale=1"><!--Place favicon.ico and apple-touch-icon.png in the root directory--><meta name="generator" content="DocPad v6.79.4" /><!-- Google Tag Manager--><script async src="https://www.googletagmanager.com/gtag/js?id=G-540M01NJGH"></script><script>window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-540M01NJGH');</script><!-- End Google Tag Manager--><link rel="icon" sizes="16x16 32x32" href="/favicon.ico?v=1"><link  rel="stylesheet" href="/css/vendor/normalize.css" /><link  rel="stylesheet" href="/css/vendor/main.css" /><link  rel="stylesheet" href="/css/vendor/bootstrap.min.css" /><link  rel="stylesheet" href="//netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css" /><link  rel="stylesheet" href="/css/style.css" /><script src="/js/vendor/modernizr-2.6.2.min.js"></script></head><body><!-- Google Tag Manager--><noscript><iframe src="//www.googletagmanager.com/ns.html?id=GTM-WDKMR7" height="0" width="0" style="display: none; visibility: hidden;"></iframe></noscript><!-- End Google Tag Manager--><!--if lt IE 8p.browsehappy
+    |You are using an
+    strong
+        |outdated browser
+    |. Please
+    a(href="http://browsehappy.com/")
+        |upgrade your browser
+    |to improve your experience.
+--><div id="wrap"><div role="navigation" class="navbar navbar-ornament navbar-fixed-top"><div class="container"><div class="navbar-header"><a href="/" class="navbar-brand">marisks # code</a></div></div></div><div class="container"><div class="row"><div class="col-sm-8"><article><header><h1>Finding content type conflict reasons</h1><p class="meta"><time datetime="2018-05-14T00:00:00.000Z">Mon May 14 2018</time></p></header><div class="lead"><p>Episerver Developer Tools are useful for finding issues in your project/website. There is a tab - &quot;Content Type Analyzer&quot; which displays the details of your content types. In some projects you may notice that some types have issues with synchronization - SynchronizationStatus has value &quot;Conflict,&quot; but it does not provide any hint about the reason for the conflict.</p>
+
+</div><p>NOTE: If you are not familiar with Episerver Developer Tools, you should check it on <a href="https://github.com/episerver/DeveloperTools">GitHub</a>.</p>
+<p>After some research, I found that Developer Tools are just displaying the list of content type models loaded from the content type model repository. The content type model does not have any property with failure reasons - only the status property.</p>
+<p>So I looked (using decompiler) how the status property is set and in which case it set the status to &quot;Conflict.&quot; I found that it uses <em>ContentTypeModel.IsInSynch</em> method. This method checks if the content type is same as the content type model by different properties. The calling code of the <em>IsInSynch</em> will set the status to &quot;Conflict&quot; when <em>IsInSynch</em> returns false. Unfortunately, <em>IsInSynch</em> method doesn&#39;t return error list - just true or false.</p>
+<p>For this reason, I have used all the checks performed in this method and collected all issues for my content types:</p>
+<pre><code class="lang-csharp">public ActionResult ContentTypeConflictList()
+{
+    var all = _contentTypeModelRepository.List().ToList();
+    var conflictedContentTypes = all.Where(x =&gt; x.State == SynchronizationStatus.Conflict);
+    var conflictedPropertyTypes = all.Select(
+        x =&gt; Tuple.Create(
+            x,
+            x.PropertyDefinitionModels.Where(
+                p =&gt; p.State == SynchronizationStatus.Conflict)));
+
+    var conflicts =
+        conflictedContentTypes.Select(ContentTypeConflicts.From)
+        .Union(conflictedPropertyTypes.SelectMany(
+            x =&gt; x.Item2.Select(p =&gt; ContentTypeConflicts.From(p, x.Item1))))
+        .ToList();
+    return View(&quot;~/Views/Shared/ContentTypeConflicts.cshtml&quot;, conflicts);
+}
+
+public class ContentTypeConflicts
+{
+    public string ModelName { get; }
+    private readonly List&lt;string&gt; _conflicts = new List&lt;string&gt;();
+
+    private ContentTypeConflicts(string modelName)
+    {
+        ModelName = modelName;
+    }
+
+    public bool Empty =&gt; _conflicts.Count == 0;
+    public IEnumerable&lt;string&gt; Conflicts =&gt; _conflicts;
+
+    public void Add(string conflict)
+    {
+        _conflicts.Add(conflict);
+    }
+
+    public static ContentTypeConflicts From(ContentTypeModel model)
+    {
+        var conflicts = new ContentTypeConflicts(model.Name);
+
+        var contentType = model.ExistingContentType;
+
+        if (!(model.ModelType == null
+            || model.ModelType.AssemblyQualifiedName == contentType.ModelTypeString))
+        {
+            conflicts.Add(
+                $@&quot;model.ModelType mismatch:
+                {model.ModelType} vs {contentType.ModelTypeString}&quot;);
+        }
+
+        if (!string.Equals(model.Name, contentType.Name))
+        {
+            conflicts.Add(
+                $@&quot;model.Name mismatch:
+                {model.Name} vs {contentType.Name}&quot;);
+        }
+
+        if (!(string.IsNullOrEmpty(model.Description)
+            || string.Equals(model.Description, contentType.Description)))
+        {
+            conflicts.Add(
+                $@&quot;model.Description mismatch:
+                {model.Description} vs {contentType.Description}&quot;);
+        }
+
+        if (!(string.IsNullOrEmpty(model.DisplayName)
+            || string.Equals(model.DisplayName, contentType.DisplayName)))
+        {
+            conflicts.Add(
+                $@&quot;model.DisplayName mismatch:
+                {model.DisplayName} vs {contentType.DisplayName}&quot;);
+        }
+
+        if (!(!model.Order.HasValue
+            || model.Order.Value == contentType.SortOrder))
+        {
+            conflicts.Add(
+                $@&quot;model.Order mismatch:
+                {model.Order.Value} vs {contentType.SortOrder}&quot;);
+        }
+
+        if (!(!model.Guid.HasValue
+            || !(model.Guid.Value != contentType.GUID)))
+        {
+            conflicts.Add(
+                $@&quot;model.Guid mismatch:
+                {model.Guid.Value} vs {contentType.GUID}&quot;);
+        }
+
+        if (!(!model.AvailableInEditMode.HasValue
+            || model.AvailableInEditMode.Value == contentType.IsAvailable))
+        {
+            conflicts.Add(
+                $@&quot;model.AvailableInEditMode mismatch:
+                {model.AvailableInEditMode.Value} vs {contentType.IsAvailable}&quot;);
+        }
+
+        if (conflicts.Empty)
+        {
+            conflicts.Add(
+                &quot;model.ACL mismatch&quot;);
+        }
+
+        return conflicts;
+    }
+
+    public static ContentTypeConflicts From(
+        PropertyDefinitionModel model, ContentTypeModel containerModel)
+    {
+        var conflicts = new ContentTypeConflicts($&quot;{containerModel.Name}-{model.Name}&quot;);
+
+        var propertyDefinition = model.ExistingPropertyDefinition;
+
+        if (!string.IsNullOrEmpty(model.TabName)
+            &amp;&amp; (TabIsNotPersisted(propertyDefinition.Tab)
+               || !string.Equals(model.TabName, propertyDefinition.Tab.Name)))
+        {
+            conflicts.Add(
+                $@&quot;model.TabName mismatch:
+                {model.TabName} vs {propertyDefinition.Tab.Name}&quot;);
+        }
+
+        if (!string.IsNullOrEmpty(model.Name)
+            &amp;&amp; !string.Equals(model.Name, propertyDefinition.Name))
+        {
+            conflicts.Add(
+                $@&quot;model.Name mismatch:
+                {model.Name} vs {propertyDefinition.Name}&quot;);
+        }
+
+        if (!string.IsNullOrEmpty(model.Description)
+            &amp;&amp; !string.Equals(model.Description, propertyDefinition.HelpText))
+        {
+            conflicts.Add(
+                $@&quot;model.Description mismatch:
+                {model.Description} vs {propertyDefinition.HelpText}&quot;);
+        }
+
+        if (!string.IsNullOrEmpty(model.DisplayName)
+            &amp;&amp; !string.Equals(model.DisplayName, propertyDefinition.EditCaption))
+        {
+            conflicts.Add(
+                $@&quot;model.DisplayName mismatch:
+                {model.DisplayName} vs {propertyDefinition.EditCaption}&quot;);
+        }
+
+        if ((model.CultureSpecific ?? false) != propertyDefinition.LanguageSpecific)
+        {
+            conflicts.Add(
+                $@&quot;model.CultureSpecific mismatch:
+                {model.CultureSpecific} vs {propertyDefinition.LanguageSpecific}&quot;);
+        }
+
+        if (model.Required.HasValue
+            &amp;&amp; model.Required.Value != propertyDefinition.Required)
+        {
+            conflicts.Add(
+                $@&quot;model.Required mismatch:
+                {model.Required} vs {propertyDefinition.Required}&quot;);
+        }
+
+        if (model.Searchable.HasValue
+            &amp;&amp; model.Searchable.Value != propertyDefinition.Searchable)
+        {
+            conflicts.Add(
+                $@&quot;model.Required mismatch:
+                {model.Searchable} vs {propertyDefinition.Searchable}&quot;);
+        }
+
+        if (model.AvailableInEditMode.HasValue
+            &amp;&amp; model.AvailableInEditMode.Value != propertyDefinition.DisplayEditUI)
+        {
+            conflicts.Add(
+                $@&quot;model.AvailableInEditMode mismatch:
+                {model.AvailableInEditMode} vs {propertyDefinition.DisplayEditUI}&quot;);
+        }
+
+        if (model.Order.HasValue
+            &amp;&amp; model.Order.Value != propertyDefinition.FieldOrder)
+        {
+            conflicts.Add(
+                $@&quot;model.Order mismatch:
+                {model.Order} vs {propertyDefinition.FieldOrder}&quot;);
+        }
+
+        return conflicts;
+    }
+
+    private static bool TabIsNotPersisted(TabDefinition tab)
+    {
+        if (tab != null)
+            return tab.ID == -1;
+        return true;
+    }
+}
+</code></pre>
+<p>Here I have created a type <em>ContentTypeConflicts</em> which holds all errors and provides factory methods to create itself. I also found that there are two types responsible for the content types - <em>ContentTypeModel</em> and <em>PropertyDefinitionModel</em> - the first one for content types and the second one for property types. <em>ContentTypeConflicts</em> uses both types when detecting errors.</p>
+<p>For <em>ContentTypeModel</em>, ACL check used some internal Episerver APIs that it was hard to extract. So I just used ACL mismatch error as a fallback if the type is in conflict and there are no other errors.</p>
+<p>And the last, I am collecting all errors in a controller action and displaying those in a view.</p>
+</article><div id="disqus_thread"></div><script>/* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+var disqus_shortname = 'marisksblog'; // required: replace example with your forum shortname
+
+/* * * DON'T EDIT BELOW THIS LINE * * */
+(function() {
+  var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+  dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+  (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();</script><noscript>Please enable JavaScript to view the<a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a><a href="http://disqus.com" class="dsq-brlink">comments powered by<span class="logo-disqus">Disqus</span></a></noscript></div><div class="col-sm-1"><aside class="archive"><ul class="nav"><li><a href="/">2021</a></li><li><a href="/2020/">2020</a></li><li><a href="/2019/">2019</a></li><li class="active"><a href="/2018/">2018</a></li><li><a href="/2017/">2017</a></li><li><a href="/2016/">2016</a></li><li><a href="/2015/">2015</a></li><li><a href="/2014/">2014</a></li><li><a href="/2013/">2013</a></li><li><a href="/2012/">2012</a></li></ul></aside></div><div class="col-sm-3"><aside class="panel panel-default"><div class="panel-body"><div class="about"><img src="/img/common/profile_0021.jpg" alt="profile picture" class="center-block img-responsive thumbnail"><p>Hi! I'm Māris Krivtežs. I am Web developer primarily working with ASP.NET, EPiServer and front-end development at&nbsp;<a href="http://geta.no" target="_blank">Geta</a>, but same time learning different programming languages, learning new programming paradigms, architectures, and design. I spend my free time with my family, reading books, bicycling and traveling.</p></div><ul class="social"><li><a href="http://stackoverflow.com/users/660154/marisks" target="_blank"><i class="fa fa-stack-overflow"></i></a></li><li><a href="https://github.com/marisks" target="_blank"><i class="fa fa-github-alt"></i></a></li><li><a href="https://twitter.com/pioners1001" target="_blank"><i class="fa fa-twitter"></i></a></li><li><a href="http://www.linkedin.com/pub/maris-krivtezs/31/98b/b53" target="_blank"><i class="fa fa-linkedin"></i></a></li><li><a href="/rss.xml" target="_blank"><i class="fa fa-rss"></i></a></li></ul><a href="https://getadigital.com" target="_blank"><img src="/img/common/ident-geta-wordmark.svg" alt="Geta logo" class="center-block img-responsive aside-logo"></a></div></aside></div></div></div></div><div id="footer"><div class="container"><div class="container credit">Copyright &copy; 2017 Maris Krivtezs. All Rights Reserved, except for the parts enumerated below:<ul class="licence-list"><li>- The source code examples on this blog are covered by&nbsp;<a href="https://opensource.org/licenses/mit-license.php">MIT License</a>.</li><li>- This page content, excluding the visual design and the logotype, is covered by&nbsp;<a href="http://creativecommons.org/licenses/by/4.0/">Creative Commons Attribution 4.0 International License</a>.</li></ul></div></div></div><script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><script>window.jQuery || document.write('<script src="/js/vendor/jquery-1.10.2.min.js"><\/script>')</script><script  src="/bower_components/bootstrap/dist/js/bootstrap.min.js"></script><script  src="/js/plugins.js"></script><script  src="/js/main.js"></script></body>

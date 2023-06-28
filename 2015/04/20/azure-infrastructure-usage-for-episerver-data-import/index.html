@@ -1,0 +1,337 @@
+<!DOCTYPE html><!--if lt IE 8html.no-js.lt-ie9.lt-ie8(lang="en")--><!--if IE 8html.no-js.lt-ie9(lang="en")--><!--if gt IE 8html.no-js(lang="en")--><head><meta charset="utf-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><title>Azure infrastructure usage for EPiServer data import | marisks # code</title><meta name="description" content="I was working in EPiServer Commerce project on product import and thought that it would be great to use Azure infrastructure to make import process more reliable and consume less resources of Web server. In this article I am describing sample project using Azure Service Bus Queues and Worker Roles for this task."><meta name="keywords" content=".NET, ASP.NET, C#, JavaScript, Optimizely, EPiServer, programming languages"><meta name="viewport" content="width=device-width, initial-scale=1"><!--Place favicon.ico and apple-touch-icon.png in the root directory--><meta name="generator" content="DocPad v6.79.4" /><!-- Google Tag Manager--><script async src="https://www.googletagmanager.com/gtag/js?id=G-540M01NJGH"></script><script>window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-540M01NJGH');</script><!-- End Google Tag Manager--><link rel="icon" sizes="16x16 32x32" href="/favicon.ico?v=1"><link  rel="stylesheet" href="/css/vendor/normalize.css" /><link  rel="stylesheet" href="/css/vendor/main.css" /><link  rel="stylesheet" href="/css/vendor/bootstrap.min.css" /><link  rel="stylesheet" href="//netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css" /><link  rel="stylesheet" href="/css/style.css" /><script src="/js/vendor/modernizr-2.6.2.min.js"></script></head><body><!-- Google Tag Manager--><noscript><iframe src="//www.googletagmanager.com/ns.html?id=GTM-WDKMR7" height="0" width="0" style="display: none; visibility: hidden;"></iframe></noscript><!-- End Google Tag Manager--><!--if lt IE 8p.browsehappy
+    |You are using an
+    strong
+        |outdated browser
+    |. Please
+    a(href="http://browsehappy.com/")
+        |upgrade your browser
+    |to improve your experience.
+--><div id="wrap"><div role="navigation" class="navbar navbar-ornament navbar-fixed-top"><div class="container"><div class="navbar-header"><a href="/" class="navbar-brand">marisks # code</a></div></div></div><div class="container"><div class="row"><div class="col-sm-8"><article><header><h1>Azure infrastructure usage for EPiServer data import</h1><p class="meta"><time datetime="2015-04-20T00:00:00.000Z">Mon Apr 20 2015</time></p></header><div class="lead">I was working in EPiServer Commerce project on product import and thought that it would be great to use Azure infrastructure to make import process more reliable and consume less resources of Web server. In this article I am describing sample project using Azure Service Bus Queues and Worker Roles for this task.</div><p>In my current <em>EPiServer Commerce</em> solution import is done using custom <em>Scheduled Jobs</em> which are resource intensive. Jobs has to be run at night to not decrease performance of Web servers. When something fails during import process <em>Scheduled Jobs</em> should start from beginning and only next night. It is not good solution in global world where applications should run 24/7 and should perform well any time. Udi Dahan describes this issue well in article <a href="http://particular.net/blog/status-fields-on-entities-harmful">Status fields on entities - HARMFUL?</a>. I created sample <em>EPiServer CMS</em> site with page import to test such architecture.</p>
+<h1 id="sample-site">Sample site</h1>
+<p>I am not going to create <em>EPiServer Commerce</em> site for this demo, but use CMS site as the main idea for data import remains same.</p>
+<p>I have described new <em>EPiServer CMS</em> project creation and hosting on <em>Azure</em> in previous <a href="/2015/04/11/episerver-cms-site-as-azure-web-app/">blog post</a>. Additionaly there are added simple start page and article page types to the project. Source code for the site and whole solution can be found on <a href="https://github.com/marisks/NewsSite">GitHub</a>. For data import test I am going to import article pages from CSV file. Here is sample CSV file format:</p>
+<pre><code>Name,Intro,Content,ImageUrl
+&quot;The Car&quot;,&quot;The Car was presented today&quot;,&quot;Today the greatest of cars was presented - &lt;b&gt;The Car&lt;/b&gt;.&quot;,http://www.publicdomainpictures.net/pictures/100000/velka/vintage-convertible-automobile.jpg
+</code></pre><h1 id="solution-architecture">Solution architecture</h1>
+<p><img src="/img/2015-04/azure_episerver_import_arch.png" alt="Azure EPiServer import architecture" class="img-responsive"></p>
+<ol>
+<li>The CSV file is uploaded onto <em>Azure Storage</em>.</li>
+<li><em>EPiServer</em> <em>Scheduled Job</em> time to time looks for added import files.</li>
+<li>When file appears, it creates <em>Service Bus</em> message with file information and publishes onto the file import queue.</li>
+<li>File import <em>Worker</em> gets messages from file import queue,</li>
+<li>reads file from <em>Storage</em>,</li>
+<li>parses it and creates messages with article data (one message per article).</li>
+<li>Then it publishes messages with article data onto the article import queue.</li>
+<li>Second <em>Worker</em> - article import worker gets messages from article import queue</li>
+<li>and posts them to <em>Web API</em> endpoint on <em>EPiServer</em> site where new articles get created.</li>
+</ol>
+<p>In this sample architecture we can see that any data transformation, file download/processing tasks can be moved to <em>Workers</em>. Such <em>Workers</em> can run paralelly and their throughput can be increased or decreased by needs or configured to autoscale. Also it offloads main <em>EPiServer</em> site from background processing tasks.</p>
+<h1 id="storage-for-import-data">Storage for import data</h1>
+<p>When running Web application on <em>Azure</em> there is no available file system for storing large amount of data and it has to be uploaded somehow to the system for processing. In on-premise solution easiest way is to have separated disk for data and configure FTP for upload. In <em>Azure</em> I can use <em>Azure Storage</em>.</p>
+<p>There are multiple ways how to upload import files to it. You can create the page for import file upload and use <a href="http://azure.microsoft.com/en-us/documentation/articles/storage-dotnet-how-to-use-blobs/">Storage API</a> or use some tool. In this article I am going to use <a href="http://azure.microsoft.com/en-us/documentation/articles/storage-use-azcopy/">AzCopy</a> tool.</p>
+<p>I already have created storage for <em>EPiServer CMS</em> and will use it for import data too, but I will add separate container and will call it <em>epiimportdata</em>.</p>
+<p><img src="/img/2015-04/azure_storage_new_container.png" alt="Azure new Storage container view" class="img-responsive"></p>
+<p>After container has been created I can use <em>AzCopy</em> to upload the file which is located on my computer - <em>D:\Temp\data\articles.csv</em>. Provide source directory for <em>AzCopy</em>, destination container URL and destination <em>Storage</em> primary or secondary key.</p>
+<pre><code>PS D:\Temp&gt; AzCopy /Source:D:\Temp\data\ /Dest:https://epinewssite.blob.core.windows.net/epiimportdata /DestKey:{key} /S
+Finished 1 of total 1 file(s).
+[2015-04-15 09:34:14] Transfer summary:
+-----------------
+Total files transferred: 1
+Transfer successfully:   1
+Transfer skipped:        0
+Transfer failed:         0
+Elapsed time:            00.00:00:01
+</code></pre><p>After upload completed you can view files in <em>Azure Portal</em>.</p>
+<p><img src="/img/2015-04/azure_storage_file_view.png" alt="Azure Storage Container file view" class="img-responsive"></p>
+<h1 id="processing">Processing</h1>
+<h2 id="episerver-scheduled-job-for-storage-monitoring">EPiServer Scheduled Job for Storage monitoring</h2>
+<p>When file is uploaded to the <em>Storage</em>, system should start processing it. There are several ways to crate Storage container file monitoring, for example, using <a href="http://stackoverflow.com/a/22053735/660154">WebJob</a>.</p>
+<p>I created <em>EPiServer</em> <em>Scheduled Job</em> which is running periodically and watching for new files in <em>Storage</em>. It uses <a href="http://azure.microsoft.com/en-us/documentation/articles/storage-dotnet-how-to-use-blobs/">Azure Storage API</a> to list files and creates file DTO objects (<em>ImportFile</em>) with file (blob) data - <em>Name</em> and <em>URL</em>. Then it creates message to publish on <em>ImportQueue</em> queue in <em>ServiceBus</em>.</p>
+<pre><code>[ScheduledPlugIn(DisplayName = &quot;Init import&quot;, SortIndex = 2000)]
+public class ImportInitializationJob : JobBase
+{
+    public override string Execute()
+    {
+        var container = CreateStorageContainer();
+
+        foreach (var item in container.ListBlobs()
+                                        .OfType&lt;CloudBlockBlob&gt;())
+        {
+            var importFile = new ImportFile
+            {
+                Name = item.Name, Uri = item.Uri
+            };
+            var message = new BrokeredMessage(importFile);
+            QueueConnector.Client.Send(message);
+        }
+
+        return &quot;Success&quot;;
+    }
+
+    private const string ContainerName = &quot;epiimportdata&quot;;
+
+    private static CloudBlobContainer CreateStorageContainer()
+    {
+        var cn = ConfigurationManager
+                        .ConnectionStrings[&quot;EPiServerAzureBlobs&quot;]
+                        .ConnectionString;
+        var storageAccount = CloudStorageAccount.Parse(cn);
+        var blobClient = storageAccount.CreateCloudBlobClient();
+
+        var container = blobClient.GetContainerReference(ContainerName);
+        container.CreateIfNotExists();
+        return container;
+    }
+}
+</code></pre><p>I am reusing <em>EPiServer</em> <em>Azure Storage</em>, but creating separate container. In production system you would like to move processed files to another container or other path before sending message to the queue, that next time when <em>Scheduled Job</em> is running, it will not load same file again.</p>
+<p>For DTO objects I created separate library project called <em>Contracts</em>. I am referencing it in all projects which produces or consumes messages from queues.</p>
+<p><em>QueueConnector</em> in this example is taken from article <a href="http://azure.microsoft.com/en-us/documentation/articles/cloud-services-dotnet-multi-tier-app-using-service-bus-queues/">.NET Multi-Tier Application Using Service Bus Queues</a>. I just changed queue name and created namespace manager from connection string. I reused same <em>ServiceBus</em> namespace as used for <em>EPiServer</em> - <em>epinewssite</em>.</p>
+<pre><code>public static class QueueConnector
+{
+    public static QueueClient Client;
+
+    public const string Namespace = &quot;epinewssite&quot;;
+    public const string QueueName = &quot;ImportQueue&quot;;
+
+    public static NamespaceManager CreateNamespaceManager()
+    {
+        var cn = ConfigurationManager
+                .ConnectionStrings[&quot;EPiServerAzureEvents&quot;]
+                .ConnectionString;
+        return NamespaceManager.CreateFromConnectionString(cn);
+    }
+
+    public static void Initialize()
+    {
+        ServiceBusEnvironment.SystemConnectivity.Mode =
+            ConnectivityMode.Http;
+
+        var namespaceManager = CreateNamespaceManager();
+
+        if (!namespaceManager.QueueExists(QueueName))
+        {
+            namespaceManager.CreateQueue(QueueName);
+        }
+
+        var messagingFactory = MessagingFactory.Create(
+            namespaceManager.Address,
+            namespaceManager.Settings.TokenProvider);
+        Client = messagingFactory.CreateQueueClient(QueueName);
+    }
+}
+</code></pre><p>Now can try and run <em>Scheduled Job</em>. Deploy new version of Web site to <em>Azure</em> and run <em>Sheduled Job</em>. Then in <a href="https://manage.windowsazure.com">old Azure Portal</a> click <em>Service Bus</em> in the menu on the left and from the list choose namespace.</p>
+<p><img src="/img/2015-04/azure_service_bus_connection.png" alt="Azure Service Bus view" class="img-responsive"></p>
+<p>Then open <em>Queues</em> tab and you should see that in <em>importqueue</em> <em>QUEUE LENGTH</em> column has value <em>1</em>.</p>
+<p><img src="/img/2015-04/azure_service_bus_importqueue.png" alt="Azure Service Bus import queue view" class="img-responsive"></p>
+<h2 id="import-file-worker">Import file Worker</h2>
+<p>First of all I have to create <em>Azure Cloud Service</em> project.</p>
+<p><img src="/img/2015-04/new_azure_cloud_service.png" alt="New Azure Cloud Service dialog" class="img-responsive"></p>
+<p>Then choose to create <em>Worker Role with Service Bus Queue</em> and rename it by clicking on small pencil on the right and type it&#39;s name.</p>
+<p><img src="/img/2015-04/new_worker_role.png" alt="New Worker Role dialog" class="img-responsive"></p>
+<p>Two new projects will be created - <em>Worker Role</em> project and <em>Azure Cloud Service</em> project. <em>Azure Cloud Service</em> project contains all needed configuration and also is responsible for deployment to <em>Azure</em>.</p>
+<p><em>Worker Role</em> project contains <em>WorkerRole.cs</em> which is starting point. As I created <em>Worker Role with Service Bus Queue</em> it already contains code to handle messages from queue.</p>
+<p>First of all I am going to configure connection strings for <em>Service Bus</em> and <em>Storage</em>. In the <em>Azure Cloud Service</em> project, right-click on the <em>Worker Role</em> under <em>Roles</em> folder and select <em>Properties</em>. Then select <em>Settings</em> tab on the left. There is already setting for <em>Service Bus Queue</em>, but I have to change it to my <em>Service Bus</em> connection string. Then I also added <em>Storage</em> connection string.</p>
+<p><img src="/img/2015-04/worker_role_settings.png" alt="Worker Role settings dialog" class="img-responsive"></p>
+<p>In <em>WorkerRole.cs</em> <em>OnStart</em> method configure two <em>Service Bus</em> clients - one for incomming messages and other for outgoing. In production system you might have multiple incoming and outgoing messages, but for this example I use one one for each direction. To read <em>Worker Role</em> settings I am using <em>CloudConfigurationManager</em>.</p>
+<pre><code>const string InQueueName = &quot;ImportQueue&quot;;
+const string OutQueueName = &quot;ImportArticleQueue&quot;;
+
+QueueClient InClient;
+QueueClient OutClient;
+
+public override bool OnStart()
+{
+    ServicePointManager.DefaultConnectionLimit = 12;
+
+    var cn = CloudConfigurationManager.GetSetting(&quot;Microsoft.ServiceBus.ConnectionString&quot;);
+    var namespaceManager = NamespaceManager.CreateFromConnectionString(cn);
+    if (!namespaceManager.QueueExists(InQueueName))
+    {
+        namespaceManager.CreateQueue(InQueueName);
+    }
+
+    if (!namespaceManager.QueueExists(OutQueueName))
+    {
+        namespaceManager.CreateQueue(OutQueueName);
+    }
+
+    InClient = QueueClient.CreateFromConnectionString(cn, InQueueName);
+    OutClient = QueueClient.CreateFromConnectionString(cn, OutQueueName);
+    return base.OnStart();
+}
+</code></pre><p>Then I created method to initialize <em>Storage Container</em>.</p>
+<pre><code>private const string ContainerName = &quot;epiimportdata&quot;;
+
+private static CloudBlobContainer CreateStorageContainer()
+{
+    var connectionString = CloudConfigurationManager.GetSetting(&quot;EPiServerAzureBlobs&quot;);
+    var storageAccount = CloudStorageAccount.Parse(connectionString);
+    var blobClient = storageAccount.CreateCloudBlobClient();
+
+    var container = blobClient.GetContainerReference(ContainerName);
+    container.CreateIfNotExists();
+    return container;
+}
+</code></pre><p>Now I am rady to consume messages. Execution of the worker is done in <em>Run</em> method. First of all I am reading message into my DTO - <em>ImportFile</em>, then getting blob reference for file by it&#39;s name. I am reading and parsing CSV file in <em>ReadArticles</em> method and creating sequence of <em>Artice</em> DTOs. When it&#39;s done publish <em>Article</em> DTOs on outgoing queue.</p>
+<pre><code>public override void Run()
+{
+    Trace.WriteLine(&quot;Starting processing of messages&quot;);
+
+    InClient.OnMessage((receivedMessage) =&gt;
+        {
+            try
+            {
+                Trace.WriteLine(&quot;Processing Service Bus message: &quot; +
+                                 receivedMessage.SequenceNumber.ToString());
+
+                var importFile = receivedMessage.GetBody&lt;ImportFile&gt;();
+                var container = CreateStorageContainer();
+                var blob = container.GetBlockBlobReference(importFile.Name);
+
+                var articles = ReadArticles(blob).ToList();
+
+                articles.ForEach(article =&gt;
+                {
+                    var message = new BrokeredMessage(article);
+                    OutClient.Send(message);
+                });
+
+                receivedMessage.Complete();
+            }
+            catch(Exception ex)
+            {
+                Trace.TraceError(&quot;Exception: {0} \n Stack Trace: {1}&quot;,
+                                    ex.Message, ex.StackTrace);
+            }
+        });
+
+    CompletedEvent.WaitOne();
+}
+</code></pre><p>For CSV parsing I am just reading file line by line and split columns by comma, but in production solution I probably would use some library to do it, for example, <a href="http://joshclose.github.io/CsvHelper/">CSV helper</a>.</p>
+<pre><code>private static IEnumerable&lt;Article&gt; ReadArticles(CloudBlockBlob blob)
+{
+    var text = blob.DownloadText();
+
+    using (var sr = new StringReader(text))
+    {
+        string line;
+        var row = 0;
+        while ((line = sr.ReadLine()) != null)
+        {
+            row++;
+            if (row == 1) continue;
+
+            var fields = line.Split(&#39;,&#39;);
+            yield return new Article
+            {
+                Name = fields[0],
+                Intro = fields[1],
+                Content = fields[2],
+                ImageUrl = fields[3]
+            };
+        }
+    }
+}
+</code></pre><p>Now <em>Worker</em> is ready for deployment. Right-click on <em>Azure Cloud Service</em> project and choose <em>Publish</em>. Sign in by providing credentials and create new cloud service - provide name and region.</p>
+<p><img src="/img/2015-04/create_cloud_service.png" alt="Create Cloud Service dialog" class="img-responsive"></p>
+<p>Then choose environment - <em>Staging</em> or <em>Production</em>, build configuration and service configuration.</p>
+<p><img src="/img/2015-04/cloud_service_publishing_settings.png" alt="Cloud Service publishing settings dialog" class="img-responsive"></p>
+<p>After all settings are configured click <em>Publish</em>. You can see progress in <em>Azure Activity Log</em>.</p>
+<p><img src="/img/2015-04/cloud_service_publishing.png" alt="Azure Activity Log dialog" class="img-responsive"></p>
+<p>Deployment will take quite a lot of time. After deployment finished, <em>Worker</em> will run automatically and will consume messages from queue. Now we should have two queues and second queue will contain one message.</p>
+<p><img src="/img/2015-04/azure_service_bus_importarticlequeue.png" alt="Azure Service Bus queue view" class="img-responsive"></p>
+<h2 id="import-articles-worker">Import articles Worker</h2>
+<p>For article import I will create another <em>Worker</em>. Follow same steps as for first <em>Worker</em> - create new <em>Worker Role with Service Bus</em>, configure <em>Service Bus</em> connection string, but skip <em>Storage</em> configuration as I will not use it in new <em>Worker</em>. Also I will need only one queue for incomming <em>Article</em> messages - <em>ImportArticleQueue</em>.</p>
+<pre><code>const string InQueueName = &quot;ImportArticleQueue&quot;;
+
+QueueClient InClient;
+
+public override bool OnStart()
+{
+    ServicePointManager.DefaultConnectionLimit = 12;
+
+    var cn = CloudConfigurationManager.GetSetting(&quot;Microsoft.ServiceBus.ConnectionString&quot;);
+    var namespaceManager = NamespaceManager.CreateFromConnectionString(cn);
+    if (!namespaceManager.QueueExists(InQueueName))
+    {
+        namespaceManager.CreateQueue(InQueueName);
+    }
+
+    InClient = QueueClient.CreateFromConnectionString(cn, InQueueName);
+    return base.OnStart();
+}
+</code></pre><p>Then I am going to consume <em>Article</em> messages and just post to <em>Web API</em> end-point which I created in <em>EPiServer</em> site.</p>
+<pre><code>public override void Run()
+{
+    Trace.WriteLine(&quot;Starting processing of messages&quot;);
+
+    InClient.OnMessage((receivedMessage) =&gt;
+        {
+            try
+            {
+                // Process the message
+                Trace.WriteLine(&quot;Processing Service Bus message: &quot;
+                                + receivedMessage.SequenceNumber.ToString());
+
+                var article = receivedMessage.GetBody&lt;Article&gt;();
+
+                using (var client = CreateClient())
+                {
+                    var str = JsonConvert.SerializeObject(article);
+                    var content = new StringContent(str, Encoding.UTF8, &quot;text/json&quot;);
+                    var result = client.PostAsync(&quot;api/article&quot;, content).Result;
+                    result.EnsureSuccessStatusCode();
+                }
+            }
+            catch
+            {
+                // Handle any message processing specific exceptions here
+            }
+        });
+
+    CompletedEvent.WaitOne();
+}
+
+private HttpClient CreateClient()
+{
+    var client = new HttpClient {BaseAddress = new Uri(&quot;http://epinewssite.azurewebsites.net/&quot;)};
+    client.DefaultRequestHeaders.Accept.Clear();
+    client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue(&quot;application/json&quot;));
+    return client;
+}
+</code></pre><p><em>Web API</em> controller just creates new page if it does not exist yet.</p>
+<pre><code>public void Post(Article article)
+{
+    var existing = _contentRepository
+                        .GetChildren&lt;ArticlePage&gt;(ContentReference.StartPage)
+                        .FirstOrDefault(x =&gt; x.Name == article.Name);
+    if (existing != null)
+    {
+        return;
+    }
+
+    var newArticlePage = _contentRepository
+                            .GetDefault&lt;ArticlePage&gt;(ContentReference.StartPage);
+
+    newArticlePage.Name = article.Name;
+    newArticlePage.Intro = article.Intro;
+    newArticlePage.Content = new XhtmlString(article.Content);
+
+    _contentRepository.Save(newArticlePage, SaveAction.Publish, AccessLevel.NoAccess);
+}
+</code></pre><p>Now publish <em>Cloud Service</em> again and will see that message disappears from queue and new article appears in <em>EPiServer CMS</em>. Import process is created and working.</p>
+<h1 id="summary">Summary</h1>
+<p>For smaller tasks like in this example, it might not be reasonable to use all this infrastructure and simpler solution would be just creating some <em>Scheduled Job</em> or page for data upload and import. But more complex import process could benefit from such solution. For example, such process might require to transform product CSV file, download sales data from 3rd party service, download images and thumbnails from media service and in the result package all data and import with <a href="http://world.episerver.com/documentation/Items/EPiServer-Service-API/">EPiServer Commerce Service API</a>.</p>
+<p><em>Azure</em> might not only improve your import process. I was using <em>Azure Storage</em> and <em>Service Bus Queues</em>, but there are available lot more <a href="http://azure.microsoft.com/en-us/overview/what-is-azure/">services</a> you can use for your solution needs. Just use them when needed.</p>
+</article><div id="disqus_thread"></div><script>/* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+var disqus_shortname = 'marisksblog'; // required: replace example with your forum shortname
+
+/* * * DON'T EDIT BELOW THIS LINE * * */
+(function() {
+  var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+  dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+  (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();</script><noscript>Please enable JavaScript to view the<a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a><a href="http://disqus.com" class="dsq-brlink">comments powered by<span class="logo-disqus">Disqus</span></a></noscript></div><div class="col-sm-1"><aside class="archive"><ul class="nav"><li><a href="/">2021</a></li><li><a href="/2020/">2020</a></li><li><a href="/2019/">2019</a></li><li><a href="/2018/">2018</a></li><li><a href="/2017/">2017</a></li><li><a href="/2016/">2016</a></li><li class="active"><a href="/2015/">2015</a></li><li><a href="/2014/">2014</a></li><li><a href="/2013/">2013</a></li><li><a href="/2012/">2012</a></li></ul></aside></div><div class="col-sm-3"><aside class="panel panel-default"><div class="panel-body"><div class="about"><img src="/img/common/profile_0021.jpg" alt="profile picture" class="center-block img-responsive thumbnail"><p>Hi! I'm Māris Krivtežs. I am Web developer primarily working with ASP.NET, EPiServer and front-end development at&nbsp;<a href="http://geta.no" target="_blank">Geta</a>, but same time learning different programming languages, learning new programming paradigms, architectures, and design. I spend my free time with my family, reading books, bicycling and traveling.</p></div><ul class="social"><li><a href="http://stackoverflow.com/users/660154/marisks" target="_blank"><i class="fa fa-stack-overflow"></i></a></li><li><a href="https://github.com/marisks" target="_blank"><i class="fa fa-github-alt"></i></a></li><li><a href="https://twitter.com/pioners1001" target="_blank"><i class="fa fa-twitter"></i></a></li><li><a href="http://www.linkedin.com/pub/maris-krivtezs/31/98b/b53" target="_blank"><i class="fa fa-linkedin"></i></a></li><li><a href="/rss.xml" target="_blank"><i class="fa fa-rss"></i></a></li></ul><a href="https://getadigital.com" target="_blank"><img src="/img/common/ident-geta-wordmark.svg" alt="Geta logo" class="center-block img-responsive aside-logo"></a></div></aside></div></div></div></div><div id="footer"><div class="container"><div class="container credit">Copyright &copy; 2017 Maris Krivtezs. All Rights Reserved, except for the parts enumerated below:<ul class="licence-list"><li>- The source code examples on this blog are covered by&nbsp;<a href="https://opensource.org/licenses/mit-license.php">MIT License</a>.</li><li>- This page content, excluding the visual design and the logotype, is covered by&nbsp;<a href="http://creativecommons.org/licenses/by/4.0/">Creative Commons Attribution 4.0 International License</a>.</li></ul></div></div></div><script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><script>window.jQuery || document.write('<script src="/js/vendor/jquery-1.10.2.min.js"><\/script>')</script><script  src="/bower_components/bootstrap/dist/js/bootstrap.min.js"></script><script  src="/js/plugins.js"></script><script  src="/js/main.js"></script></body>

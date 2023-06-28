@@ -1,0 +1,214 @@
+<!DOCTYPE html><!--if lt IE 8html.no-js.lt-ie9.lt-ie8(lang="en")--><!--if IE 8html.no-js.lt-ie9(lang="en")--><!--if gt IE 8html.no-js(lang="en")--><head><meta charset="utf-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><title>Using MassTransit to improve EPiServer data import on Azure | marisks # code</title><meta name="description" content="Azure has Service Bus service available, but while it is called 'Service Bus' it is messaging service as MSMQ or RabitMQ. Creating reliable message passing might be hard, but luckly there are several frameworks available. In this article I am going to describe how to use MassTransit's Service Bus framework with Azure Service Bus to improve EPiServer data import."><meta name="keywords" content=".NET, ASP.NET, C#, JavaScript, Optimizely, EPiServer, programming languages"><meta name="viewport" content="width=device-width, initial-scale=1"><!--Place favicon.ico and apple-touch-icon.png in the root directory--><meta name="generator" content="DocPad v6.79.4" /><!-- Google Tag Manager--><script async src="https://www.googletagmanager.com/gtag/js?id=G-540M01NJGH"></script><script>window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-540M01NJGH');</script><!-- End Google Tag Manager--><link rel="icon" sizes="16x16 32x32" href="/favicon.ico?v=1"><link  rel="stylesheet" href="/css/vendor/normalize.css" /><link  rel="stylesheet" href="/css/vendor/main.css" /><link  rel="stylesheet" href="/css/vendor/bootstrap.min.css" /><link  rel="stylesheet" href="//netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css" /><link  rel="stylesheet" href="/css/style.css" /><script src="/js/vendor/modernizr-2.6.2.min.js"></script></head><body><!-- Google Tag Manager--><noscript><iframe src="//www.googletagmanager.com/ns.html?id=GTM-WDKMR7" height="0" width="0" style="display: none; visibility: hidden;"></iframe></noscript><!-- End Google Tag Manager--><!--if lt IE 8p.browsehappy
+    |You are using an
+    strong
+        |outdated browser
+    |. Please
+    a(href="http://browsehappy.com/")
+        |upgrade your browser
+    |to improve your experience.
+--><div id="wrap"><div role="navigation" class="navbar navbar-ornament navbar-fixed-top"><div class="container"><div class="navbar-header"><a href="/" class="navbar-brand">marisks # code</a></div></div></div><div class="container"><div class="row"><div class="col-sm-8"><article><header><h1>Using MassTransit to improve EPiServer data import on Azure</h1><p class="meta"><time datetime="2015-06-01T00:00:00.000Z">Mon Jun 01 2015</time></p></header><div class="lead">Azure has Service Bus service available, but while it is called 'Service Bus' it is messaging service as MSMQ or RabitMQ. Creating reliable message passing might be hard, but luckly there are several frameworks available. In this article I am going to describe how to use MassTransit's Service Bus framework with Azure Service Bus to improve EPiServer data import.</div><h1 id="introduction">Introduction</h1>
+<p>More than a month ago I wrote an article <a href="/2015/04/20/azure-infrastructure-usage-for-episerver-data-import/">Azure infrastructure usage for EPiServer data import</a> in which I described how to use <em>Azure Service Bus</em> <em>Queues</em> to create import of <em>EPiServer</em> data.</p>
+<p>While <em>Azure Service Bus</em> <em>Queues</em> did it&#39;s work, it has several issues. <em>Queues</em> are only transport layer - those are used to pass messages around. It means that you have to handle errors, retry policy and transaction handling on your own.</p>
+<p>Luckly there are several frameworks available to help with these issues. Most popular ones are <a href="http://masstransit-project.com/">MassTransit</a> and <a href="http://particular.net/nservicebus">NServiceBus</a>, but there are also other frameworks like <a href="http://mookid.dk/oncode/rebus">Rebus</a>. In this article I am going to describe how to use <em>MassTransit</em> for my task.</p>
+<p>In my article I used tutorial from <a href="http://looselycoupledlabs.com/author/davidprothero-com/">David Prothero</a> - <a href="http://looselycoupledlabs.com/2014/09/masstransit-on-microsoft-azure-2/">MassTransit on Microsoft Azure</a>.</p>
+<h1 id="solution">Solution</h1>
+<h2 id="setup">Setup</h2>
+<p>I am using the project from previous <a href="/2015/04/20/azure-infrastructure-usage-for-episerver-data-import/">article</a>. So you have to read it before to understand solution completely.</p>
+<p>This time I decided to share common initialization and configuration between projects and created new project for shared configuration initialization - <em>Configuration</em>.</p>
+<p>Then install <em>NuGet</em> package for <em>MassTransit</em> with <em>Azure Service Bus</em> into all projects which uses <em>Azure Service Bus</em> - <em>Configuration</em>, <em>ImportArticleProcessor</em>, <em>ImportDataProcessor</em>, <em>NewsSite</em>.</p>
+<pre><code>Install-Package MassTransit.AzureServiceBus
+</code></pre><p>After installing <em>NuGet</em> package add common configuration to <em>Configuration</em> project. I called class <em>AzureBusConfiguration</em> and added names of namespace and all queues there. Probably in production system you would want to make it configurable (at least namespace name).</p>
+<pre><code>public static class AzureBusConfiguration
+{
+    public const string Namespace = &quot;epinewssite&quot;;
+    public const string ImportDataQueueName = &quot;importqueue&quot;;
+    public const string ImportArticleQueueName = &quot;importarticlequeue&quot;;
+}
+</code></pre><p>Next create <em>MassTransit&#39;s</em> <em>Bus</em> initialization class <em>AzureBusInitializer</em> with factory method which creates <em>IServiceBus</em> instance. Here I am just wrapping my <em>Bus</em> initialization logic for whole application. Each <em>Bus</em> instance is created with watching for messages on some queue, with additional initialization if needed and creating connection to <em>Azure Service Bus</em> <em>Queue</em> using connection string.</p>
+<pre><code>public class AzureBusInitializer
+{
+    public static IServiceBus CreateBus(
+        string queueName,
+        Action&lt;ServiceBusConfigurator&gt; moreInitialization,
+        string connectionString)
+    {
+        var bus = ServiceBusFactory.New(sbc =&gt;
+        {
+            sbc.UseLibLog();
+
+            var queueUri = &quot;azure-sb://&quot; + AzureBusConfiguration.Namespace + &quot;/&quot; + queueName;
+
+            sbc.ReceiveFrom(queueUri);
+
+            sbc.UseAzureServiceBus(a =&gt; a.ConfigureNamespace(
+                AzureBusConfiguration.Namespace, h =&gt;
+                {
+                    h.SetKeyName(&quot;RootManageSharedAccessKey&quot;);
+                    h.SetKey(CnBuilder(connectionString).SharedAccessKey);
+                }));
+            sbc.UseAzureServiceBusRouting();
+
+            moreInitialization(sbc);
+        });
+
+        return bus;
+    }
+
+    private static ServiceBusConnectionStringBuilder CnBuilder(string connectionString)
+    {
+        return new ServiceBusConnectionStringBuilder(connectionString);
+    }
+}
+</code></pre><h2 id="scheduled-job-for-import-initialization">Scheduled Job for import initialization</h2>
+<p>Previous <em>Scheduled Job</em> can be found <a href="https://github.com/marisks/NewsSite/blob/master/NewsSite/Business/ImportInitializationJob.cs">here</a>. I changed <em>Execute</em> method to use newly created <em>Bus</em> initializer. <em>Bus</em> is created by providing queue name to listen for messages on, additional initialization and connection string. This <em>Scheduled Job</em> does not listen to any messages, so it doesn&#39;t metter what queue name to provide. Also it do not require aditional initialization, but connection string is retrieved from <em>Web.config</em>. We can publish message without wrapping into another class like with <em>Azure</em> <em>Queues</em> (which requires to wrap message within <em>BrokeredMessage</em>).</p>
+<pre><code>public override string Execute()
+{
+    var cn = ConfigurationManager
+            .ConnectionStrings[&quot;EPiServerAzureEvents&quot;]
+            .ConnectionString;
+
+    var container = CreateStorageContainer();
+
+    using (var bus = AzureBusInitializer.CreateBus(
+        AzureBusConfiguration.ImportDataQueueName, x =&gt; { }, cn))
+    {
+        foreach (var item in container.ListBlobs()
+                                        .OfType&lt;CloudBlockBlob&gt;())
+        {
+            var importFile = new ImportFile
+            {
+                Name = item.Name, Uri = item.Uri
+            };
+            bus.Publish(importFile, x =&gt; {x.SetDeliveryMode(DeliveryMode.Persistent);});
+        }
+    }
+
+    return &quot;Success&quot;;
+}
+</code></pre><p>Now if you run your <em>Scheduled Job</em> it will run successfully, but you will not see any message on <em>Azure</em> <em>Queues</em> because <em>MassTransit</em> requires at least one subscriber to particular message.</p>
+<h2 id="import-data-processor">Import data processor</h2>
+<p>First create message consumer in <em>ImportDataProcessor</em> project. It will watch for messages of <em>ImportFile</em>. Consumer class should inherit from <em>Consumes&lt;T&gt;.Context</em> and implement <em>Consume</em> method. <em>Consume</em> method receives message as parameter and received data is hold in <em>Message</em> property. Received message also has <em>Bus</em> property which is reference to <em>Bus</em> instance the message was sent on. As I am publishing another message here, I am reusing it. I am not sure if that is good solution. In production system I would inject <em>Bus</em> instance in <em>Consumer&#39;s</em> constructor.</p>
+<pre><code>public class ImportFileConsumer : Consumes&lt;ImportFile&gt;.Context
+{
+    public void Consume(IConsumeContext&lt;ImportFile&gt; message)
+    {
+        var importFile = message.Message;
+        var container = CreateStorageContainer();
+        var blob = container.GetBlockBlobReference(importFile.Name);
+
+        var articles = ReadArticles(blob).ToList();
+
+        articles.ForEach(article =&gt;
+        {
+            message.Bus.Publish(article);
+        });
+    }
+
+    // other code omitted
+}
+</code></pre><p>Next configure <em>Bus</em> to run on <em>Worker</em> process. <em>Worker</em> process do not need <em>Run</em> method anymore. Now just create <em>Bus</em> and provide additional initialization logic which adds <em>ImportFileConsumer</em> to listen for messages.</p>
+<pre><code>public class WorkerRole : RoleEntryPoint
+{
+    readonly ManualResetEvent CompletedEvent = new ManualResetEvent(false);
+    private IServiceBus _bus;
+
+    public override bool OnStart()
+    {
+        ServicePointManager.DefaultConnectionLimit = 12;
+
+        var cn = CloudConfigurationManager
+                    .GetSetting(&quot;Microsoft.ServiceBus.ConnectionString&quot;);
+
+        _bus = AzureBusInitializer.CreateBus(
+            AzureBusConfiguration.ImportDataQueueName, sbc =&gt;
+            {
+                sbc.SetConcurrentConsumerLimit(64);
+                sbc.Subscribe(subs =&gt;
+                {
+                    subs.Consumer&lt;ImportFileConsumer&gt;().Permanent();
+                });
+            }, cn);
+
+        return base.OnStart();
+    }
+
+    public override void OnStop()
+    {
+        if (_bus != null)
+            _bus.Dispose();
+
+        CompletedEvent.Set();
+        base.OnStop();
+    }
+}
+</code></pre><h2 id="import-article-processor">Import article processor</h2>
+<p><em>ImportArticleProcessor</em> is similar to <em>ImportDataProcessor</em>. It has <em>Article</em> message consumer defined and initializes <em>Bus</em> same way, but listens on another queue.</p>
+<pre><code>public class ImportArticleConsumer : Consumes&lt;Article&gt;.Context
+{
+    public void Consume(IConsumeContext&lt;Article&gt; message)
+    {
+        var article = message.Message;
+
+        using (var client = CreateClient())
+        {
+            var str = JsonConvert.SerializeObject(article);
+            var content = new StringContent(str, Encoding.UTF8, &quot;text/json&quot;);
+            var result = client.PostAsync(&quot;api/article&quot;, content).Result;
+            result.EnsureSuccessStatusCode();
+        }
+    }
+
+    // omitted code
+}
+
+public class WorkerRole : RoleEntryPoint
+{
+    readonly ManualResetEvent CompletedEvent = new ManualResetEvent(false);
+    private IServiceBus _bus;
+
+    public override bool OnStart()
+    {
+        ServicePointManager.DefaultConnectionLimit = 12;
+
+        var cn = CloudConfigurationManager
+                    .GetSetting(&quot;Microsoft.ServiceBus.ConnectionString&quot;);
+
+        _bus = AzureBusInitializer.CreateBus(
+            AzureBusConfiguration.ImportArticleQueueName, sbc =&gt;
+            {
+                sbc.SetConcurrentConsumerLimit(64);
+                sbc.Subscribe(subs =&gt;
+                {
+                    subs.Consumer&lt;ImportArticleConsumer&gt;().Permanent();
+                });
+            }, cn);
+
+
+        return base.OnStart();
+    }
+
+    public override void OnStop()
+    {
+         if (_bus != null)
+            _bus.Dispose();
+
+        CompletedEvent.Set();
+        base.OnStop();
+    }
+}
+</code></pre><p>Now application is ready to run. After you publish it on <em>Azure</em> and run you will see that 2 new queues are created and also <em>MassTransit</em> will create 2 new topics with one subscriber for each. When you run import job queues will receive messages and articles gets imported. If your job or site hangs during the run, <em>MassTransit</em> will handle it and next time when consumer gets back to work, it will consume missed messages. These scenarios can be easily tested locally with <a href="https://azure.microsoft.com/en-us/documentation/articles/cloud-services-performance-testing-visual-studio-profiler/">Azure Compute emulators</a>.</p>
+<p>Source code can be found on <a href="https://github.com/marisks/news_site_masstransit">GitHub</a>.</p>
+<h1 id="summary">Summary</h1>
+<p>While working with <em>Azure Service Bus</em> <em>Queues</em> is not hard, complicated scenarios might not work or might require additional work to be done. <em>MassTransit</em> helps to deal with that and starting with it is not harder than working directly with <em>Azure Queues</em>.</p>
+</article><div id="disqus_thread"></div><script>/* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+var disqus_shortname = 'marisksblog'; // required: replace example with your forum shortname
+
+/* * * DON'T EDIT BELOW THIS LINE * * */
+(function() {
+  var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+  dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+  (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();</script><noscript>Please enable JavaScript to view the<a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a><a href="http://disqus.com" class="dsq-brlink">comments powered by<span class="logo-disqus">Disqus</span></a></noscript></div><div class="col-sm-1"><aside class="archive"><ul class="nav"><li><a href="/">2021</a></li><li><a href="/2020/">2020</a></li><li><a href="/2019/">2019</a></li><li><a href="/2018/">2018</a></li><li><a href="/2017/">2017</a></li><li><a href="/2016/">2016</a></li><li class="active"><a href="/2015/">2015</a></li><li><a href="/2014/">2014</a></li><li><a href="/2013/">2013</a></li><li><a href="/2012/">2012</a></li></ul></aside></div><div class="col-sm-3"><aside class="panel panel-default"><div class="panel-body"><div class="about"><img src="/img/common/profile_0021.jpg" alt="profile picture" class="center-block img-responsive thumbnail"><p>Hi! I'm Māris Krivtežs. I am Web developer primarily working with ASP.NET, EPiServer and front-end development at&nbsp;<a href="http://geta.no" target="_blank">Geta</a>, but same time learning different programming languages, learning new programming paradigms, architectures, and design. I spend my free time with my family, reading books, bicycling and traveling.</p></div><ul class="social"><li><a href="http://stackoverflow.com/users/660154/marisks" target="_blank"><i class="fa fa-stack-overflow"></i></a></li><li><a href="https://github.com/marisks" target="_blank"><i class="fa fa-github-alt"></i></a></li><li><a href="https://twitter.com/pioners1001" target="_blank"><i class="fa fa-twitter"></i></a></li><li><a href="http://www.linkedin.com/pub/maris-krivtezs/31/98b/b53" target="_blank"><i class="fa fa-linkedin"></i></a></li><li><a href="/rss.xml" target="_blank"><i class="fa fa-rss"></i></a></li></ul><a href="https://getadigital.com" target="_blank"><img src="/img/common/ident-geta-wordmark.svg" alt="Geta logo" class="center-block img-responsive aside-logo"></a></div></aside></div></div></div></div><div id="footer"><div class="container"><div class="container credit">Copyright &copy; 2017 Maris Krivtezs. All Rights Reserved, except for the parts enumerated below:<ul class="licence-list"><li>- The source code examples on this blog are covered by&nbsp;<a href="https://opensource.org/licenses/mit-license.php">MIT License</a>.</li><li>- This page content, excluding the visual design and the logotype, is covered by&nbsp;<a href="http://creativecommons.org/licenses/by/4.0/">Creative Commons Attribution 4.0 International License</a>.</li></ul></div></div></div><script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><script>window.jQuery || document.write('<script src="/js/vendor/jquery-1.10.2.min.js"><\/script>')</script><script  src="/bower_components/bootstrap/dist/js/bootstrap.min.js"></script><script  src="/js/plugins.js"></script><script  src="/js/main.js"></script></body>

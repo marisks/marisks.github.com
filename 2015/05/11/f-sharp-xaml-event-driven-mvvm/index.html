@@ -1,0 +1,122 @@
+<!DOCTYPE html><!--if lt IE 8html.no-js.lt-ie9.lt-ie8(lang="en")--><!--if IE 8html.no-js.lt-ie9(lang="en")--><!--if gt IE 8html.no-js(lang="en")--><head><meta charset="utf-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><title>F# Xaml - event driven MVVM | marisks # code</title><meta name="description" content="I have tried two different approaches to create Xaml application - MVC and MVVM, but did not feel that those are functional enough. In this article I am looking at event driven MVVM using FSharp.ViewModule's EventViewModelBase&amp;lt;'a&gt;."><meta name="keywords" content=".NET, ASP.NET, C#, JavaScript, Optimizely, EPiServer, programming languages"><meta name="viewport" content="width=device-width, initial-scale=1"><!--Place favicon.ico and apple-touch-icon.png in the root directory--><meta name="generator" content="DocPad v6.79.4" /><!-- Google Tag Manager--><script async src="https://www.googletagmanager.com/gtag/js?id=G-540M01NJGH"></script><script>window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-540M01NJGH');</script><!-- End Google Tag Manager--><link rel="icon" sizes="16x16 32x32" href="/favicon.ico?v=1"><link  rel="stylesheet" href="/css/vendor/normalize.css" /><link  rel="stylesheet" href="/css/vendor/main.css" /><link  rel="stylesheet" href="/css/vendor/bootstrap.min.css" /><link  rel="stylesheet" href="//netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css" /><link  rel="stylesheet" href="/css/style.css" /><script src="/js/vendor/modernizr-2.6.2.min.js"></script></head><body><!-- Google Tag Manager--><noscript><iframe src="//www.googletagmanager.com/ns.html?id=GTM-WDKMR7" height="0" width="0" style="display: none; visibility: hidden;"></iframe></noscript><!-- End Google Tag Manager--><!--if lt IE 8p.browsehappy
+    |You are using an
+    strong
+        |outdated browser
+    |. Please
+    a(href="http://browsehappy.com/")
+        |upgrade your browser
+    |to improve your experience.
+--><div id="wrap"><div role="navigation" class="navbar navbar-ornament navbar-fixed-top"><div class="container"><div class="navbar-header"><a href="/" class="navbar-brand">marisks # code</a></div></div></div><div class="container"><div class="row"><div class="col-sm-8"><article><header><h1>F# Xaml - event driven MVVM</h1><p class="meta"><time datetime="2015-05-11T00:00:00.000Z">Mon May 11 2015</time></p></header><div class="lead">I have tried two different approaches to create Xaml application - MVC and MVVM, but did not feel that those are functional enough. In this article I am looking at event driven MVVM using FSharp.ViewModule's EventViewModelBase<'a>.</div><h1 id="introduction">Introduction</h1>
+<p>In my last article about <a href="/2015/04/27/f-sharp-xaml-application-mvvm-vs-mvc/">F# Xaml application</a> <a href="http://reedcopsey.com/">Reed Copsey</a> <a href="/2015/04/27/f-sharp-xaml-application-mvvm-vs-mvc/#comment-1990588618">pointed out</a> that <em>FSharp.ViewModule&#39;s</em> <em>EventViewModelBase&lt;&#39;a&gt;</em> allows handling commands as event stream. In this article I am looking how to rewrite my game score board event driven way using <em>EventViewModelBase&lt;&#39;a&gt;</em>.</p>
+<p>User interface and <em>Xaml</em> view remains same as in <a href="/2015/04/27/f-sharp-xaml-application-mvvm-vs-mvc/">previous version</a> and view model requires some changes described in next paragraphs.</p>
+<h1 id="event-driven-mvvm">Event driven MVVM</h1>
+<p>First of all define model. It is simple record type with two score values for two teams.</p>
+<pre><code>type Score = {
+    ScoreA: int
+    ScoreB: int
+}
+</code></pre><p>Then define event type which will be used in view model&#39;s event stream and should be passed as type parameter to <em>EventViewModelBase&lt;&#39;a&gt;</em>. For this purpose define discriminated union with events for increasing, decreasing score and starting new game. Those are similar as in <a href="/2015/04/27/f-sharp-xaml-application-mvvm-vs-mvc/">MVC version</a> of application.</p>
+<pre><code>type ScoringEvent = IncA | DecA | IncB | DecB | New
+</code></pre><p>Now define view model itself and inherit from <em>EventViewModelBase&lt;ScoringEvent&gt;</em>.</p>
+<pre><code>type MainViewModel() as self =
+    inherit EventViewModelBase&lt;ScoringEvent&gt;()
+</code></pre><p>Create mutable field to store score and initialize it with default value. Also create backing fields and properties for fields which will be used to bind score to <em>Xaml</em> view&#39;s labels. This is same as in <a href="/2015/04/27/f-sharp-xaml-application-mvvm-vs-mvc/">MVVM version</a> from previous article.</p>
+<pre><code>let defaultScore = { ScoreA = 0; ScoreB = 0}
+let mutable score = defaultScore
+
+let scoreA = self.Factory.Backing(&lt;@ self.ScoreA @&gt;, &quot;00&quot;)
+let scoreB = self.Factory.Backing(&lt;@ self.ScoreB @&gt;, &quot;00&quot;)
+
+member self.ScoreA with get() = scoreA.Value
+                    and set value = scoreA.Value &lt;- value
+member self.ScoreB with get() = scoreB.Value
+                    and set value = scoreB.Value &lt;- value
+</code></pre><p><em>EventViewModelBase&lt;&#39;a&gt;</em> has property <em>EventStream</em> of type <em>IObservable&lt;&#39;a&gt;</em> - in our case it is <em>IObservable&lt;ScoringEvent&gt;</em>. <em>EventViewModelBase&lt;&#39;a&gt;</em> will trigger all bound events onto this stream that it is possible to use this property to subscribe to the events.</p>
+<p>Scoring application has to handle all the events and update the view model. So I created separate functions for both actions - <em>eventHandler</em> and <em>updateScore</em>. Then subscribe to <em>EventStream</em> to handle events. As <em>eventHandler</em> returns <em>unit</em> and <em>updateScore</em> has input parameter <em>unit</em>, I can easily compose both functions.</p>
+<pre><code>let updateScore () =
+    self.ScoreA &lt;- score.ScoreA.ToString(&quot;D2&quot;)
+    self.ScoreB &lt;- score.ScoreB.ToString(&quot;D2&quot;)
+
+let eventHandler ev =
+    match ev with
+    | IncA -&gt; score &lt;- {score with ScoreA = score.ScoreA + 1}
+    | DecA -&gt; score &lt;- {score with ScoreA = score.ScoreA - 1}
+    | IncB -&gt; score &lt;- {score with ScoreB = score.ScoreB + 1}
+    | DecB -&gt; score &lt;- {score with ScoreB = score.ScoreB + 1}
+    | New -&gt; score &lt;- defaultScore
+
+do
+    self.EventStream
+    |&gt; Observable.subscribe (eventHandler &gt;&gt; updateScore)
+    |&gt; ignore
+</code></pre><p>The last task is binding events to commands. <em>EventViewModelBase&lt;&#39;a&gt;</em> has <em>Factory</em> property with method <em>EventValueCommand</em> which helps to bind events. <em>EventValueCommand</em> has several overloads:</p>
+<ul>
+<li><em>EventValueCommand():Input.ICommand</em> - it creates command without any event bound. Events for such command are bound using <em>EventArgsConverter&lt;&#39;a, &#39;b&gt;</em> which is useful, for example, for mouse event binding. There is a good example in <a href="https://github.com/fsprojects/FsXaml/tree/master/demos/WpfSimpleDrawingApplication"><em>FsXaml</em> repository</a>.</li>
+<li><em>EventValueCommand(valueFactory: &#39;b -&gt; &#39;a):Input.ICommand</em> - uses factory function to create event of type <em>&#39;a</em> from some value of type <em>&#39;b</em>.</li>
+<li><em>EventValueCommand(value:&#39;a):Input.ICommand</em> - creates command from event of type <em>&#39;a</em>.</li>
+</ul>
+<p>Scoring application has simple events one per command, so just create command by providing event value.</p>
+<pre><code>member self.IncA = self.Factory.EventValueCommand(IncA)
+member self.DecA = self.Factory.EventValueCommand(DecA)
+member self.IncB = self.Factory.EventValueCommand(IncB)
+member self.DecB = self.Factory.EventValueCommand(DecB)
+member self.NewGame = self.Factory.EventValueCommand(New)
+</code></pre><p>Now everything is ready - run application and verify that it works.</p>
+<p>You can find full source code for this version of application on <a href="https://github.com/marisks/evented_mvvm/tree/basic">GitHub</a>.</p>
+<h2 id="introducing-controller">Introducing Controller</h2>
+<p>Current solution is simple enough, but it does not conform well to <a href="http://en.wikipedia.org/wiki/Single_responsibility_principle">Single Responsibility Principle</a>. So I want to show how to refactor it by introducing controller which will handle model changes.</p>
+<p>First of all extend model with static member <em>zero</em> which is used to initialize and reset score.</p>
+<pre><code>type Score = {
+    ScoreA: int
+    ScoreB: int
+} with
+    static member zero = {ScoreA = 0; ScoreB = 0}
+</code></pre><p>Our handler function takes <em>ScoringEvent</em> as a parameter and returns <em>unit</em>. It could be possible to extract it as a controller, but I wanted to make my controller a <a href="http://en.wikipedia.org/wiki/Pure_function">pure function</a>. So my controller takes model and event as a parameter and returns new model. Here is controller type - it is just simple function.</p>
+<pre><code>type Controller = Score -&gt; ScoringEvent -&gt; Score
+</code></pre><p>Now inject controller into view model.</p>
+<pre><code>type MainViewModel(controller : Controller) as self =
+    inherit EventViewModelBase&lt;ScoringEvent&gt;()
+</code></pre><p>And rewrite <em>eventHandler</em> function to use newly created controller. Now <em>eventHandler</em> works as an <em>adapter</em> between controller and event stream and handles mutable state change.</p>
+<pre><code>let eventHandler ev =
+    score &lt;- controller score ev
+</code></pre><p>Now create controller function. For this purpose I have created separate module.</p>
+<pre><code>module Handling =
+
+    let controller score ev =
+       match ev with
+        | IncA -&gt; {score with ScoreA = score.ScoreA + 1}
+        | DecA -&gt; {score with ScoreA = score.ScoreA - 1}
+        | IncB -&gt; {score with ScoreB = score.ScoreB + 1}
+        | DecB -&gt; {score with ScoreB = score.ScoreB - 1}
+        | New -&gt; Score.zero
+</code></pre><p>The last task is composing all parts together. When you have view model without default contsructor, <em>Xaml</em> requires separate type which provides instance of view model. First of all define type <em>CompositionRoot</em> with <em>ViewModel</em> property which returns composed view model.</p>
+<pre><code>type CompositionRoot() =
+    member x.ViewModel with get() = MainViewModel(Handling.controller)
+</code></pre><p>Then modify <em>Xaml</em> view to include this type as resource.</p>
+<pre><code>&lt;Controls:MetroWindow.Resources&gt;
+    &lt;ResourceDictionary&gt;
+        &lt;local:CompositionRoot x:Key=&quot;CompositionRoot&quot;/&gt;
+    &lt;/ResourceDictionary&gt;
+&lt;/Controls:MetroWindow.Resources&gt;
+</code></pre><p>And set <em>DataContext</em> by providing <em>CompositionRoot</em> as a source and path to <em>ViewModel</em> property.</p>
+<pre><code>&lt;Controls:MetroWindow.DataContext&gt;
+    &lt;Binding Source=&quot;{StaticResource CompositionRoot}&quot; Path=&quot;ViewModel&quot; /&gt;
+&lt;/Controls:MetroWindow.DataContext&gt;
+</code></pre><p>Application is ready to run. For this simple example it might be overhead to extract such controller, but for more complex scenarios and for testing purposes it is worth to.</p>
+<p>You can find full source code for this version of application on <a href="https://github.com/marisks/evented_mvvm/tree/mvc">GitHub</a>.</p>
+<h1 id="summary">Summary</h1>
+<p>I like event driven <em>MVVM</em>. It makes code easy to extend as you saw in second example. Application&#39;s view model is responsible for model and event binding, but controller for model changes <em>functional</em> way. Extracting controller is not the only option to improve your <em>MVVM</em> application - you could inject some event filtering functions, event subscribers, separate controllers for separate events etc. based on your application needs. You can make application to look like <em>MVC</em>, but have no enforcement from some framework on how to implement it because <em>FSharp.ViewModule</em> is <a href="http://tomasp.net/blog/2015/library-frameworks/">library and not a framework</a>.</p>
+<p><strong>UPDATE</strong>
+<em>Reed Copsey</em> did refacoring of my application. Source code for refactored sample can be found <a href="https://github.com/marisks/evented_mvvm/tree/mvc_refactored">here</a>.</p>
+</article><div id="disqus_thread"></div><script>/* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+var disqus_shortname = 'marisksblog'; // required: replace example with your forum shortname
+
+/* * * DON'T EDIT BELOW THIS LINE * * */
+(function() {
+  var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+  dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+  (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();</script><noscript>Please enable JavaScript to view the<a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a><a href="http://disqus.com" class="dsq-brlink">comments powered by<span class="logo-disqus">Disqus</span></a></noscript></div><div class="col-sm-1"><aside class="archive"><ul class="nav"><li><a href="/">2021</a></li><li><a href="/2020/">2020</a></li><li><a href="/2019/">2019</a></li><li><a href="/2018/">2018</a></li><li><a href="/2017/">2017</a></li><li><a href="/2016/">2016</a></li><li class="active"><a href="/2015/">2015</a></li><li><a href="/2014/">2014</a></li><li><a href="/2013/">2013</a></li><li><a href="/2012/">2012</a></li></ul></aside></div><div class="col-sm-3"><aside class="panel panel-default"><div class="panel-body"><div class="about"><img src="/img/common/profile_0021.jpg" alt="profile picture" class="center-block img-responsive thumbnail"><p>Hi! I'm Māris Krivtežs. I am Web developer primarily working with ASP.NET, EPiServer and front-end development at&nbsp;<a href="http://geta.no" target="_blank">Geta</a>, but same time learning different programming languages, learning new programming paradigms, architectures, and design. I spend my free time with my family, reading books, bicycling and traveling.</p></div><ul class="social"><li><a href="http://stackoverflow.com/users/660154/marisks" target="_blank"><i class="fa fa-stack-overflow"></i></a></li><li><a href="https://github.com/marisks" target="_blank"><i class="fa fa-github-alt"></i></a></li><li><a href="https://twitter.com/pioners1001" target="_blank"><i class="fa fa-twitter"></i></a></li><li><a href="http://www.linkedin.com/pub/maris-krivtezs/31/98b/b53" target="_blank"><i class="fa fa-linkedin"></i></a></li><li><a href="/rss.xml" target="_blank"><i class="fa fa-rss"></i></a></li></ul><a href="https://getadigital.com" target="_blank"><img src="/img/common/ident-geta-wordmark.svg" alt="Geta logo" class="center-block img-responsive aside-logo"></a></div></aside></div></div></div></div><div id="footer"><div class="container"><div class="container credit">Copyright &copy; 2017 Maris Krivtezs. All Rights Reserved, except for the parts enumerated below:<ul class="licence-list"><li>- The source code examples on this blog are covered by&nbsp;<a href="https://opensource.org/licenses/mit-license.php">MIT License</a>.</li><li>- This page content, excluding the visual design and the logotype, is covered by&nbsp;<a href="http://creativecommons.org/licenses/by/4.0/">Creative Commons Attribution 4.0 International License</a>.</li></ul></div></div></div><script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><script>window.jQuery || document.write('<script src="/js/vendor/jquery-1.10.2.min.js"><\/script>')</script><script  src="/bower_components/bootstrap/dist/js/bootstrap.min.js"></script><script  src="/js/plugins.js"></script><script  src="/js/main.js"></script></body>

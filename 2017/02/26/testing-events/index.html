@@ -1,0 +1,156 @@
+<!DOCTYPE html><!--if lt IE 8html.no-js.lt-ie9.lt-ie8(lang="en")--><!--if IE 8html.no-js.lt-ie9(lang="en")--><!--if gt IE 8html.no-js(lang="en")--><head><meta charset="utf-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><title>Testing events | marisks # code</title><meta name="description" content="Previously, I wrote an article how to handle events in the Episerver but I did not show how to test those. I am a fan of the Test Driven Development but when working with the Episerver it is quite hard to test the code including .NET event testing. Developers tend to not write unit tests for those. In this article, I will show that this is quite easy when using the right tools."><meta name="keywords" content=".NET, ASP.NET, C#, JavaScript, Optimizely, EPiServer, programming languages"><meta name="viewport" content="width=device-width, initial-scale=1"><!--Place favicon.ico and apple-touch-icon.png in the root directory--><meta name="generator" content="DocPad v6.79.4" /><!-- Google Tag Manager--><script async src="https://www.googletagmanager.com/gtag/js?id=G-540M01NJGH"></script><script>window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-540M01NJGH');</script><!-- End Google Tag Manager--><link rel="icon" sizes="16x16 32x32" href="/favicon.ico?v=1"><link  rel="stylesheet" href="/css/vendor/normalize.css" /><link  rel="stylesheet" href="/css/vendor/main.css" /><link  rel="stylesheet" href="/css/vendor/bootstrap.min.css" /><link  rel="stylesheet" href="//netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css" /><link  rel="stylesheet" href="/css/style.css" /><script src="/js/vendor/modernizr-2.6.2.min.js"></script></head><body><!-- Google Tag Manager--><noscript><iframe src="//www.googletagmanager.com/ns.html?id=GTM-WDKMR7" height="0" width="0" style="display: none; visibility: hidden;"></iframe></noscript><!-- End Google Tag Manager--><!--if lt IE 8p.browsehappy
+    |You are using an
+    strong
+        |outdated browser
+    |. Please
+    a(href="http://browsehappy.com/")
+        |upgrade your browser
+    |to improve your experience.
+--><div id="wrap"><div role="navigation" class="navbar navbar-ornament navbar-fixed-top"><div class="container"><div class="navbar-header"><a href="/" class="navbar-brand">marisks # code</a></div></div></div><div class="container"><div class="row"><div class="col-sm-8"><article><header><h1>Testing events</h1><p class="meta"><time datetime="2017-02-26T00:00:00.000Z">Sun Feb 26 2017</time></p></header><div class="lead"><p>Previously, I wrote an <a href="/2017/02/12/better-event-handling-in-episerver/">article</a> how to handle events in the Episerver but I did not show how to test those. I am a fan of the Test Driven Development but when working with the Episerver it is quite hard to test the code including .NET event testing. Developers tend to not write unit tests for those. In this article, I will show that this is quite easy when using the right tools.</p>
+
+</div><p>In the <a href="/2017/02/12/better-event-handling-in-episerver/">Better event handling in Episerver</a> article, I described event handling in the initialization module. But it makes the code harder to test. Because of that, I extracted event initialization into separate class - <em>EventsMediator</em>.</p>
+<pre><code>public class EventsMediator
+{
+    private readonly IContentEvents _contentEvents;
+    private readonly IMediator _mediator;
+
+    public EventsMediator(IContentEvents contentEvents, IMediator mediator)
+    {
+        if (contentEvents == null) throw new ArgumentNullException(nameof(contentEvents));
+        if (mediator == null) throw new ArgumentNullException(nameof(mediator));
+        _contentEvents = contentEvents;
+        _mediator = mediator;
+    }
+
+    public void Initialize()
+    {
+    }
+}
+</code></pre><p><em>EventsMediator</em> is responsible for initialization of <em>Episerver</em> events and event publishing on the mediator. There is one method - <em>Initialize</em> (<em>Uninitialize</em> also is needed but I omitted it in this article) which should be called in the initialization module&#39;s <em>Initialize</em> method. <em>EventsMediator</em> should be registered as a singleton (same as <em>IMediator</em> and <em>IContentEvents</em>) that there should be only one instance which is publishing events.</p>
+<p>For testing, I chose to use a <a href="https://fixie.github.io/">Fixie</a> test framework - this is simple convention based framework with great flexibility. It doesn&#39;t matter which test framework you are using but I wanted to try something new. Another tool which is used here is a <a href="https://fakeiteasy.github.io/">FakeItEasy</a> fake framework. It allows easily to fake event raising and an assert method calls.</p>
+<p>Here is the setup for our <em>EventsMediator</em>.</p>
+<pre><code>public class EventsMediatorTests
+{
+    private readonly EventsMediator _eventsMediator;
+    private readonly IContentEvents _contentEvents;
+    private readonly IMediator _mediator;
+
+    public EventsMediatorTests()
+    {
+        _contentEvents = A.Fake&lt;IContentEvents&gt;();
+        _mediator = A.Fake&lt;IMediator&gt;();
+        _eventsMediator = new EventsMediator(_contentEvents, _mediator);
+
+        _eventsMediator.Initialize();
+    }
+}
+</code></pre><p>The test class has the postfix <em>Tests</em> in the name - this is a default convention for <em>Fixie</em> to look for test classes. Then in the constructor, I initialized fake content events and mediator instances which are passed into the <em>EventsMediator</em>. And then call <em>Initialize</em> method which we are going to test for event initialization.</p>
+<p><em>Fixie</em> framework runs any public method in the test class as a test. So I created a public method for the first test which tests <em>CheckedInContent</em> event raising.</p>
+<pre><code>public void it_publishes_CheckedInContent_notification_on_CheckedInContent_event()
+{
+    _contentEvents.CheckedInContent +=
+      Raise.With(new ContentEventArgs(ContentReference.EmptyReference));
+
+    A.CallTo(
+      () =&gt; _mediator.Publish(A&lt;CheckedInContent&gt;.Ignored, A&lt;CancellationToken&gt;.Ignored))
+      .MustHaveHappened();
+}
+</code></pre><p><em>CheckedInContent</em> is of generic type <em>EventHandler&lt;ContentEventArgs&gt;</em>. It makes raising of the event simple with <em>FakeItEasy&#39;s</em> <em>Raise.With</em> and passing in event arguments. Then comes assertion - use <em>FakeItEasy&#39;s</em> <em>CallTo</em> method to check if the method was called. In our case, it is calling to the mediator&#39;s <em>Publish</em> method. For now, I am ignoring parameter values but checking for correct types passed into the method.</p>
+<p>Raising events on the custom delegate is a little bit harder. For example, <em>LoadingChildren</em> event has a type of <em>ChildrenEventHandler</em> delegate. When raising such event, you have to pass type parameter of the event, object sender and event arguments.</p>
+<pre><code>object nullSender = null;
+var ev = new ChildrenEventArgs(ContentReference.EmptyReference, new List&lt;IContent&gt;());
+_contentEvents.LoadingChildren += Raise.With&lt;ChildrenEventHandler&gt;(nullSender, ev);
+</code></pre><p>Writing down same <em>FakeItEasy&#39;s</em> <em>CallTo</em> calls in each test method is quite annoying. It is possible to simplify it by extracting the method for such assertion. As I care only if the particular event type is called, my assertion method takes only the type of the event I care about.</p>
+<pre><code>private void ShouldPublishNotificationWith&lt;T&gt;()
+    where T: INotification
+{
+    A.CallTo(
+      () =&gt; _mediator.Publish(A&lt;T&gt;.Ignored, A&lt;CancellationToken&gt;.Ignored))
+      .MustHaveHappened();
+}
+</code></pre><p>Now test method looks much simpler and easier to read.</p>
+<pre><code>public void it_publishes_CheckedInContent_notification_on_CheckedInContent_event()
+{
+    _contentEvents.CheckedInContent +=
+      Raise.With(new ContentEventArgs(ContentReference.EmptyReference));
+
+    ShouldPublishNotificationWith&lt;CheckedInContent&gt;();
+}
+</code></pre><p>While testing for the raised type of the event is useful, we are not checking for correct values passed into the mediator. We have to compare the passed in event object to the expected one. While we can compare each property of the event, it would be harder to maintain. As events can be immutable, we can think of those as <a href="https://martinfowler.com/bliki/ValueObject.html">value objects</a>. Value objects should be easy to compare. To achieve this, I am using a base class for all events - <a href="https://lostechies.com/jimmybogard/2007/06/25/generic-value-object-equality/">ValueObject</a> which takes care of comparing the objects.</p>
+<p>For example, <em>LoadingChildren</em> event inherits from <em>ValueObject&lt;LoadingChildren&gt;</em>. I also added factory method for the event to be easier to create.</p>
+<pre><code>public class LoadingChildren : ValueObject&lt;LoadingChildren&gt;, INotification
+{
+    public LoadingChildren(ContentReference contentLink)
+    {
+        ContentLink = contentLink;
+    }
+
+    public ContentReference ContentLink { get; }
+
+    public static LoadingChildren FromChildrenEventArgs(ChildrenEventArgs args)
+    {
+        return new LoadingChildren(args.ContentLink);
+    }
+}
+</code></pre><p>Now we need another assertion method which allows comparing the value passed into the mediator&#39;s <em>Publish</em> method. To be able to compare any value passed into it, I added a predicate argument.</p>
+<pre><code>private void ShouldPublishNotificationWith&lt;T&gt;(Expression&lt;Func&lt;T, bool&gt;&gt; predicate)
+    where T : INotification
+{
+    A.CallTo(
+      () =&gt; _mediator.Publish(A&lt;T&gt;.That.Matches(predicate), A&lt;CancellationToken&gt;.Ignored))
+      .MustHaveHappened();
+}
+</code></pre><p>Our <em>LoadingChilden</em> event test looks like this now.</p>
+<pre><code>public void it_publishes_LoadingChildren_notification_on_LoadingChildren_event()
+{
+    object nullSender = null;
+    var ev = new ChildrenEventArgs(ContentReference.EmptyReference, new List&lt;IContent&gt;());
+    var expected = LoadingChildren.FromChildrenEventArgs(ev);
+
+    _contentEvents.LoadingChildren += Raise.With&lt;ChildrenEventHandler&gt;(nullSender, ev);
+
+    ShouldPublishNotificationWith&lt;LoadingChildren&gt;(actual =&gt; actual == expected);
+}
+</code></pre><p>I did not show how <em>EventMediator</em> looked like after each step of the <em>TDD</em> cycle but here is the final version.</p>
+<pre><code>public class EventsMediator
+{
+    private readonly IContentEvents _contentEvents;
+    private readonly IMediator _mediator;
+
+    public EventsMediator(IContentEvents contentEvents, IMediator mediator)
+    {
+        if (contentEvents == null) throw new ArgumentNullException(nameof(contentEvents));
+        if (mediator == null) throw new ArgumentNullException(nameof(mediator));
+        _contentEvents = contentEvents;
+        _mediator = mediator;
+    }
+
+    public void Initialize()
+    {
+        _contentEvents.LoadingChildren += OnLoadingChildren;
+        _contentEvents.CheckedInContent += OnCheckedInContent;
+    }
+
+    private async void OnLoadingChildren(object sender, ChildrenEventArgs e)
+    {
+        await _mediator.Publish(LoadingChildren.FromChildrenEventArgs(e));
+    }
+
+    private async void OnCheckedInContent(object sender, ContentEventArgs e)
+    {
+        await _mediator.Publish(new CheckedInContent());
+    }
+}
+</code></pre><p>It is still missing a lot of event handling. Also, <em>CheckedInContent</em> event doesn&#39;t contain the data but now it is easy to write the tests for the rest events with the current setup.</p>
+</article><div id="disqus_thread"></div><script>/* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+var disqus_shortname = 'marisksblog'; // required: replace example with your forum shortname
+
+/* * * DON'T EDIT BELOW THIS LINE * * */
+(function() {
+  var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+  dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+  (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();</script><noscript>Please enable JavaScript to view the<a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a><a href="http://disqus.com" class="dsq-brlink">comments powered by<span class="logo-disqus">Disqus</span></a></noscript></div><div class="col-sm-1"><aside class="archive"><ul class="nav"><li><a href="/">2021</a></li><li><a href="/2020/">2020</a></li><li><a href="/2019/">2019</a></li><li><a href="/2018/">2018</a></li><li class="active"><a href="/2017/">2017</a></li><li><a href="/2016/">2016</a></li><li><a href="/2015/">2015</a></li><li><a href="/2014/">2014</a></li><li><a href="/2013/">2013</a></li><li><a href="/2012/">2012</a></li></ul></aside></div><div class="col-sm-3"><aside class="panel panel-default"><div class="panel-body"><div class="about"><img src="/img/common/profile_0021.jpg" alt="profile picture" class="center-block img-responsive thumbnail"><p>Hi! I'm Māris Krivtežs. I am Web developer primarily working with ASP.NET, EPiServer and front-end development at&nbsp;<a href="http://geta.no" target="_blank">Geta</a>, but same time learning different programming languages, learning new programming paradigms, architectures, and design. I spend my free time with my family, reading books, bicycling and traveling.</p></div><ul class="social"><li><a href="http://stackoverflow.com/users/660154/marisks" target="_blank"><i class="fa fa-stack-overflow"></i></a></li><li><a href="https://github.com/marisks" target="_blank"><i class="fa fa-github-alt"></i></a></li><li><a href="https://twitter.com/pioners1001" target="_blank"><i class="fa fa-twitter"></i></a></li><li><a href="http://www.linkedin.com/pub/maris-krivtezs/31/98b/b53" target="_blank"><i class="fa fa-linkedin"></i></a></li><li><a href="/rss.xml" target="_blank"><i class="fa fa-rss"></i></a></li></ul><a href="https://getadigital.com" target="_blank"><img src="/img/common/ident-geta-wordmark.svg" alt="Geta logo" class="center-block img-responsive aside-logo"></a></div></aside></div></div></div></div><div id="footer"><div class="container"><div class="container credit">Copyright &copy; 2017 Maris Krivtezs. All Rights Reserved, except for the parts enumerated below:<ul class="licence-list"><li>- The source code examples on this blog are covered by&nbsp;<a href="https://opensource.org/licenses/mit-license.php">MIT License</a>.</li><li>- This page content, excluding the visual design and the logotype, is covered by&nbsp;<a href="http://creativecommons.org/licenses/by/4.0/">Creative Commons Attribution 4.0 International License</a>.</li></ul></div></div></div><script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><script>window.jQuery || document.write('<script src="/js/vendor/jquery-1.10.2.min.js"><\/script>')</script><script  src="/bower_components/bootstrap/dist/js/bootstrap.min.js"></script><script  src="/js/plugins.js"></script><script  src="/js/main.js"></script></body>

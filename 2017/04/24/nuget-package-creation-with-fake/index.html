@@ -1,0 +1,302 @@
+<!DOCTYPE html><!--if lt IE 8html.no-js.lt-ie9.lt-ie8(lang="en")--><!--if IE 8html.no-js.lt-ie9(lang="en")--><!--if gt IE 8html.no-js(lang="en")--><head><meta charset="utf-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><title>NuGet package creation with FAKE | marisks # code</title><meta name="description" content="Recently, I was creating a library package for Episerver and required to create a NuGet package. Usually, at Geta we have a Team City configuration for project builds and NuGet package creation. But this time I was creating my package. While it is possible just to package your project with nuget.exe directly, it would need too many manual steps when releasing a new version of your package. In this article, I will show how to use FAKE for this purpose."><meta name="keywords" content=".NET, ASP.NET, C#, JavaScript, Optimizely, EPiServer, programming languages"><meta name="viewport" content="width=device-width, initial-scale=1"><!--Place favicon.ico and apple-touch-icon.png in the root directory--><meta name="generator" content="DocPad v6.79.4" /><!-- Google Tag Manager--><script async src="https://www.googletagmanager.com/gtag/js?id=G-540M01NJGH"></script><script>window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-540M01NJGH');</script><!-- End Google Tag Manager--><link rel="icon" sizes="16x16 32x32" href="/favicon.ico?v=1"><link  rel="stylesheet" href="/css/vendor/normalize.css" /><link  rel="stylesheet" href="/css/vendor/main.css" /><link  rel="stylesheet" href="/css/vendor/bootstrap.min.css" /><link  rel="stylesheet" href="//netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css" /><link  rel="stylesheet" href="/css/style.css" /><script src="/js/vendor/modernizr-2.6.2.min.js"></script></head><body><!-- Google Tag Manager--><noscript><iframe src="//www.googletagmanager.com/ns.html?id=GTM-WDKMR7" height="0" width="0" style="display: none; visibility: hidden;"></iframe></noscript><!-- End Google Tag Manager--><!--if lt IE 8p.browsehappy
+    |You are using an
+    strong
+        |outdated browser
+    |. Please
+    a(href="http://browsehappy.com/")
+        |upgrade your browser
+    |to improve your experience.
+--><div id="wrap"><div role="navigation" class="navbar navbar-ornament navbar-fixed-top"><div class="container"><div class="navbar-header"><a href="/" class="navbar-brand">marisks # code</a></div></div></div><div class="container"><div class="row"><div class="col-sm-8"><article><header><h1>NuGet package creation with FAKE</h1><p class="meta"><time datetime="2017-04-24T00:00:00.000Z">Mon Apr 24 2017</time></p></header><div class="lead"><p>Recently, I was creating a library package for Episerver and required to create a NuGet package. Usually, at Geta we have a Team City configuration for project builds and NuGet package creation. But this time I was creating my package. While it is possible just to package your project with nuget.exe directly, it would need too many manual steps when releasing a new version of your package. In this article, I will show how to use <a href="http://fsharp.github.io/FAKE/">FAKE</a> for this purpose.</p>
+
+</div><h1 id="initial-setup">Initial setup</h1>
+<p>First of all, you have to install a <em>FAKE</em> package. I found that it is much easier when you have a separate project for it. I have created a new <em>F#</em> library project and called it <em>Build</em>. Then installed the <em>FAKE</em> package.</p>
+<pre><code>Install-Package FAKE
+</code></pre><p>Then create an initial build script. Call it <em>build.fsx</em>.</p>
+<pre><code class="lang-fsharp">#r @&quot;../../packages/FAKE.4.58.6/tools/FakeLib.dll&quot;
+
+open Fake
+
+Target &quot;Default&quot; DoNothing
+
+RunTargetOrDefault &quot;Default&quot;
+</code></pre>
+<p>On the first line, I am referencing a <em>FAKE</em> library. Reference to the library should be relative to the build script. After <em>FAKE</em> update you might need to change the path. But there are other options to install, reference and update <em>FAKE</em> which would not need it. You can check <a href="https://github.com/octokit/octokit.net">Octokit.NET</a> project for example.</p>
+<p>Then, &quot;open&quot; the <em>FAKE</em> namespace. &quot;open&quot; is a similar keyword to the &quot;using&quot; in <em>C#</em>.</p>
+<p>With <em>Target</em> you are defining steps and actions which should be run. In this case, I defined a <em>Default</em> target which does nothing. After that, I run it by default on the script run.</p>
+<p>Now, you have to create a batch file to simplify a build script execution.</p>
+<pre><code class="lang-batch">@echo off
+cls
+
+&quot;..\..\packages\FAKE.4.58.6\tools\Fake.exe&quot; build.fsx
+pause
+</code></pre>
+<p>I am just calling the <em>Fake.exe</em> with the script file name as a parameter.</p>
+<h1 id="assembly-info-file-patching">Assembly info file patching</h1>
+<p>Now you have a base. Next step I would like to perform is building the project with the correct assembly version. <em>FAKE</em> has a special <a href="http://fsharp.github.io/FAKE/assemblyinfo.html">task for it</a>.</p>
+<pre><code class="lang-fsharp">#r @&quot;../../packages/FAKE.4.58.6/tools/FakeLib.dll&quot;
+
+open Fake
+
+let company = &quot;Maris Krivtezs&quot;
+let projectName = &quot;CoolProject&quot;
+let projectDescription = &quot;A cool project.&quot;
+let copyright = &quot;Copyright © Maris Krivtezs 2017&quot;
+let assemblyVersion = &quot;1.0.0&quot;
+
+let solutionPath = &quot;../../CoolProject.sln&quot;
+let assemblyInfoPath = &quot;../CoolProject/Properties/AssemblyInfo.cs&quot;
+
+MSBuildDefaults &lt;- {
+    MSBuildDefaults with
+        ToolsVersion = Some &quot;14.0&quot;
+        Verbosity = Some MSBuildVerbosity.Minimal }
+
+open Fake.AssemblyInfoFile
+
+Target &quot;AssemblyInfo&quot; (fun _ -&gt;
+    CreateCSharpAssemblyInfo assemblyInfoPath
+      [ Attribute.Product projectName
+        Attribute.Version assemblyVersion
+        Attribute.FileVersion assemblyVersion
+        Attribute.ComVisible false
+        Attribute.Copyright copyright
+        Attribute.Company company
+        Attribute.Description projectDescription
+        Attribute.Title projectName]
+)
+
+let buildMode = getBuildParamOrDefault &quot;buildMode&quot; &quot;Release&quot;
+
+let setParams defaults = {
+    defaults with
+        ToolsVersion = Some(&quot;14.0&quot;)
+        Targets = [&quot;Build&quot;]
+        Properties =
+            [
+                &quot;Configuration&quot;, buildMode
+            ]
+    }
+
+Target &quot;BuildApp&quot; (fun _ -&gt;
+    build setParams solutionPath
+        |&gt; DoNothing
+)
+
+Target &quot;Default&quot; DoNothing
+
+&quot;AssemblyInfo&quot;
+  ==&gt; &quot;BuildApp&quot;
+
+RunTargetOrDefault &quot;Default&quot;
+</code></pre>
+<p>First of all, you have to define properties for an assembly info - author, project name, etc. Then you need to define several paths - a solution file location and an assembly info file location.</p>
+<p>After that, define <em>MSBuild</em> default settings. </p>
+<p>Next step, is an assembly info file patching. Reference a <em>Fake.AssemblyInfoFile</em> namespace and create a target for an assembly info patching. Then, set all the required properties for the assembly info with <em>CreateCSharpAssemblyInfo</em> function.</p>
+<p>Now it is time to build our solution. At first, create a function which will override default build parameters and set build mode. The <em>getBuildParamOrDefault</em> function will return a build mode from the script parameters or will use a default value. Create a build target and run the build.</p>
+<p>The last step is defining dependencies. You can define dependencies by splitting target names with an <em>arrow</em> - <em>===&gt;</em>. In this example, our &quot;AssemblyInfo&quot; target will run before &quot;BuildApp&quot; target.</p>
+<p>In the batch file add the parameter to run &quot;BuildApp&quot; target and execute the batch file. Now your application should be patched and built.</p>
+<pre><code class="lang-batch">@echo off
+cls
+
+&quot;..\..\packages\FAKE.4.58.6\tools\Fake.exe&quot; build.fsx &quot;BuildApp&quot;
+pause
+</code></pre>
+<h1 id="creating-nuget-package">Creating NuGet package</h1>
+<p>The first step, when creating a NuGet package is a creation of the <em>nuspec</em> file. It is a little bit different than we are used to. <em>FAKE</em> has <a href="http://fsharp.github.io/FAKE/create-nuget-package.html">different syntax</a> for the <em>placeholders</em> than <em>NuGet</em>.</p>
+<pre><code class="lang-xml">&lt;?xml version=&quot;1.0&quot; encoding=&quot;utf-8&quot;?&gt;
+&lt;package xmlns:xsi=&quot;http://www.w3.org/2001/XMLSchema-instance&quot; xmlns:xsd=&quot;http://www.w3.org/2001/XMLSchema&quot;&gt;
+  &lt;metadata xmlns=&quot;http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd&quot;&gt;
+    &lt;id&gt;@project@&lt;/id&gt;
+    &lt;version&gt;@build.number@&lt;/version&gt;
+    &lt;authors&gt;@authors@&lt;/authors&gt;
+    &lt;owners&gt;@authors@&lt;/owners&gt;
+    &lt;summary&gt;@summary@&lt;/summary&gt;
+    &lt;licenseUrl&gt;https://github.com/marisks/CoolProject/LICENSE&lt;/licenseUrl&gt;
+    &lt;projectUrl&gt;https://github.com/marisks/CoolProject&lt;/projectUrl&gt;
+    &lt;requireLicenseAcceptance&gt;false&lt;/requireLicenseAcceptance&gt;
+    &lt;description&gt;@description@&lt;/description&gt;
+    &lt;releaseNotes&gt;@releaseNotes@&lt;/releaseNotes&gt;
+    &lt;copyright&gt;Copyright Maris Krivtezs 2017&lt;/copyright&gt;
+    &lt;tags&gt;Episerver&lt;/tags&gt;
+    @dependencies@
+    @references@
+  &lt;/metadata&gt;
+&lt;/package&gt;
+</code></pre>
+<p>In this <em>nuspec</em> file, I skipped the <em>@files@</em> placeholder because I want to include files automatically.</p>
+<p>Now you can add the target for the package creation.</p>
+<pre><code class="lang-fsharp">
+let company = &quot;Maris Krivtezs&quot;
+let authors = [company]
+let projectName = &quot;CoolProject&quot;
+let projectDescription = &quot;A cool project.&quot;
+let projectSummary = projectDescription
+let releaseNotes = &quot;Initial release&quot;
+let copyright = &quot;Copyright © Maris Krivtezs 2017&quot;
+let assemblyVersion = &quot;1.0.0&quot;
+
+let solutionPath = &quot;../../CoolProject.sln&quot;
+let buildDir = &quot;../CoolProject/bin&quot;
+let packagesDir = &quot;../../packages/&quot;
+let packagingRoot = &quot;../../packaging/&quot;
+let packagingDir = packagingRoot @@ &quot;core&quot;
+let assemblyInfoPath = &quot;../CoolProject/Properties/AssemblyInfo.cs&quot;
+
+let PackageDependency packageName =
+    packageName, GetPackageVersion packagesDir packageName 
+
+// ...
+
+Target &quot;CreateCorePackage&quot; (fun _ -&gt;
+    let net45Dir = packagingDir @@ &quot;lib/net45/&quot;
+
+    CleanDirs [net45Dir]
+
+    CopyFile net45Dir (buildDir @@ &quot;Release/CoolProject.dll&quot;)
+    CopyFile net45Dir (buildDir @@ &quot;Release/CoolProject.pdb&quot;)
+
+    NuGet (fun p -&gt;
+        {p with 
+            Authors = authors
+            Project = projectName
+            Description = projectDescription
+            OutputPath = packagingRoot
+            Summary = projectSummary
+            WorkingDir = packagingDir
+            Version = assemblyVersion
+            ReleaseNotes = releaseNotes
+            Publish = false
+            Dependencies =
+                [
+                PackageDependency &quot;EPiServer.CMS.Core&quot;
+                ]
+            }) &quot;core.nuspec&quot;
+)
+</code></pre>
+<p>You will need additional properties and paths for the target. Here I need a new folder for the packaging result. I specified it in the <em>packagingDir</em> variable.</p>
+<p>When running the target, you should clean the target folder first, then copy the files needed for the package and then create the package itself.</p>
+<p>In the <em>NuGet</em> function, specify all the properties required for the package and set dependencies. Here I am using a helper function to define a package dependency. It looks for a package with a package version from your packages folder.</p>
+<p>The final script will look like this:</p>
+<pre><code class="lang-fsharp">#r @&quot;../../packages/FAKE.4.58.6/tools/FakeLib.dll&quot;
+
+open Fake
+
+let company = &quot;Maris Krivtezs&quot;
+let authors = [company]
+let projectName = &quot;CoolProject&quot;
+let projectDescription = &quot;A cool project.&quot;
+let projectSummary = projectDescription
+let releaseNotes = &quot;Initial release&quot;
+let copyright = &quot;Copyright © Maris Krivtezs 2017&quot;
+let assemblyVersion = &quot;1.0.0&quot;
+
+let solutionPath = &quot;../../CoolProject.sln&quot;
+let buildDir = &quot;../CoolProject/bin&quot;
+let packagesDir = &quot;../../packages/&quot;
+let packagingRoot = &quot;../../packaging/&quot;
+let packagingDir = packagingRoot @@ &quot;core&quot;
+let assemblyInfoPath = &quot;../CoolProject/Properties/AssemblyInfo.cs&quot;
+
+let PackageDependency packageName =
+    packageName, GetPackageVersion packagesDir packageName 
+
+MSBuildDefaults &lt;- {
+    MSBuildDefaults with
+        ToolsVersion = Some &quot;14.0&quot;
+        Verbosity = Some MSBuildVerbosity.Minimal }
+
+Target &quot;Clean&quot; (fun _ -&gt;
+    CleanDirs [buildDir; packagingRoot; packagingDir]
+)
+
+open Fake.AssemblyInfoFile
+
+Target &quot;AssemblyInfo&quot; (fun _ -&gt;
+    CreateCSharpAssemblyInfo assemblyInfoPath
+      [ Attribute.Product projectName
+        Attribute.Version assemblyVersion
+        Attribute.FileVersion assemblyVersion
+        Attribute.ComVisible false
+        Attribute.Copyright copyright
+        Attribute.Company company
+        Attribute.Description projectDescription
+        Attribute.Title projectName]
+)
+
+let buildMode = getBuildParamOrDefault &quot;buildMode&quot; &quot;Release&quot;
+
+let setParams defaults = {
+    defaults with
+        ToolsVersion = Some(&quot;14.0&quot;)
+        Targets = [&quot;Build&quot;]
+        Properties =
+            [
+                &quot;Configuration&quot;, buildMode
+            ]
+    }
+
+Target &quot;BuildApp&quot; (fun _ -&gt;
+    build setParams solutionPath
+        |&gt; DoNothing
+)
+
+Target &quot;CreateCorePackage&quot; (fun _ -&gt;
+    let net45Dir = packagingDir @@ &quot;lib/net45/&quot;
+
+    CleanDirs [net45Dir]
+
+    CopyFile net45Dir (buildDir @@ &quot;Release/CoolProject.dll&quot;)
+    CopyFile net45Dir (buildDir @@ &quot;Release/CoolProject.pdb&quot;)
+
+    NuGet (fun p -&gt;
+        {p with 
+            Authors = authors
+            Project = projectName
+            Description = projectDescription
+            OutputPath = packagingRoot
+            Summary = projectSummary
+            WorkingDir = packagingDir
+            Version = assemblyVersion
+            ReleaseNotes = releaseNotes
+            Publish = false
+            Dependencies =
+                [
+                PackageDependency &quot;EPiServer.CMS.Core&quot;
+                ]
+            }) &quot;core.nuspec&quot;
+)
+
+Target &quot;Default&quot; DoNothing
+
+Target &quot;CreatePackages&quot; DoNothing
+
+&quot;Clean&quot;
+   ==&gt; &quot;AssemblyInfo&quot;
+   ==&gt; &quot;BuildApp&quot;
+
+&quot;BuildApp&quot;
+   ==&gt; &quot;CreateCorePackage&quot;
+   ==&gt; &quot;CreatePackages&quot;
+
+RunTargetOrDefault &quot;Default&quot;
+</code></pre>
+<p>In the final script, I also added &quot;Clean&quot; target which will wipe out all the previous build files. I also defined additional target dependencies.</p>
+<p>The batch file for the package creation will look like this:</p>
+<pre><code class="lang-batch">@echo off
+cls
+
+&quot;..\..\packages\FAKE.4.58.6\tools\Fake.exe&quot; build.fsx &quot;CreatePackages&quot;
+pause
+</code></pre>
+</article><div id="disqus_thread"></div><script>/* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+var disqus_shortname = 'marisksblog'; // required: replace example with your forum shortname
+
+/* * * DON'T EDIT BELOW THIS LINE * * */
+(function() {
+  var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+  dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+  (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();</script><noscript>Please enable JavaScript to view the<a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a><a href="http://disqus.com" class="dsq-brlink">comments powered by<span class="logo-disqus">Disqus</span></a></noscript></div><div class="col-sm-1"><aside class="archive"><ul class="nav"><li><a href="/">2021</a></li><li><a href="/2020/">2020</a></li><li><a href="/2019/">2019</a></li><li><a href="/2018/">2018</a></li><li class="active"><a href="/2017/">2017</a></li><li><a href="/2016/">2016</a></li><li><a href="/2015/">2015</a></li><li><a href="/2014/">2014</a></li><li><a href="/2013/">2013</a></li><li><a href="/2012/">2012</a></li></ul></aside></div><div class="col-sm-3"><aside class="panel panel-default"><div class="panel-body"><div class="about"><img src="/img/common/profile_0021.jpg" alt="profile picture" class="center-block img-responsive thumbnail"><p>Hi! I'm Māris Krivtežs. I am Web developer primarily working with ASP.NET, EPiServer and front-end development at&nbsp;<a href="http://geta.no" target="_blank">Geta</a>, but same time learning different programming languages, learning new programming paradigms, architectures, and design. I spend my free time with my family, reading books, bicycling and traveling.</p></div><ul class="social"><li><a href="http://stackoverflow.com/users/660154/marisks" target="_blank"><i class="fa fa-stack-overflow"></i></a></li><li><a href="https://github.com/marisks" target="_blank"><i class="fa fa-github-alt"></i></a></li><li><a href="https://twitter.com/pioners1001" target="_blank"><i class="fa fa-twitter"></i></a></li><li><a href="http://www.linkedin.com/pub/maris-krivtezs/31/98b/b53" target="_blank"><i class="fa fa-linkedin"></i></a></li><li><a href="/rss.xml" target="_blank"><i class="fa fa-rss"></i></a></li></ul><a href="https://getadigital.com" target="_blank"><img src="/img/common/ident-geta-wordmark.svg" alt="Geta logo" class="center-block img-responsive aside-logo"></a></div></aside></div></div></div></div><div id="footer"><div class="container"><div class="container credit">Copyright &copy; 2017 Maris Krivtezs. All Rights Reserved, except for the parts enumerated below:<ul class="licence-list"><li>- The source code examples on this blog are covered by&nbsp;<a href="https://opensource.org/licenses/mit-license.php">MIT License</a>.</li><li>- This page content, excluding the visual design and the logotype, is covered by&nbsp;<a href="http://creativecommons.org/licenses/by/4.0/">Creative Commons Attribution 4.0 International License</a>.</li></ul></div></div></div><script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><script>window.jQuery || document.write('<script src="/js/vendor/jquery-1.10.2.min.js"><\/script>')</script><script  src="/bower_components/bootstrap/dist/js/bootstrap.min.js"></script><script  src="/js/plugins.js"></script><script  src="/js/main.js"></script></body>

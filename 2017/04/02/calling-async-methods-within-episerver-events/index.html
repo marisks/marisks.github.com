@@ -1,0 +1,90 @@
+<!DOCTYPE html><!--if lt IE 8html.no-js.lt-ie9.lt-ie8(lang="en")--><!--if IE 8html.no-js.lt-ie9(lang="en")--><!--if gt IE 8html.no-js(lang="en")--><head><meta charset="utf-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><title>Calling async methods within Episerver events | marisks # code</title><meta name="description" content="In the article Better event handling in Episerver, I wrote how to handle Episerver events. I was calling the async Publish method of mediator in the fire and forget manner. But it is not a good solution in an ASP.NET application as there is no warranty that the running task will finish."><meta name="keywords" content=".NET, ASP.NET, C#, JavaScript, Optimizely, EPiServer, programming languages"><meta name="viewport" content="width=device-width, initial-scale=1"><!--Place favicon.ico and apple-touch-icon.png in the root directory--><meta name="generator" content="DocPad v6.79.4" /><!-- Google Tag Manager--><script async src="https://www.googletagmanager.com/gtag/js?id=G-540M01NJGH"></script><script>window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-540M01NJGH');</script><!-- End Google Tag Manager--><link rel="icon" sizes="16x16 32x32" href="/favicon.ico?v=1"><link  rel="stylesheet" href="/css/vendor/normalize.css" /><link  rel="stylesheet" href="/css/vendor/main.css" /><link  rel="stylesheet" href="/css/vendor/bootstrap.min.css" /><link  rel="stylesheet" href="//netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css" /><link  rel="stylesheet" href="/css/style.css" /><script src="/js/vendor/modernizr-2.6.2.min.js"></script></head><body><!-- Google Tag Manager--><noscript><iframe src="//www.googletagmanager.com/ns.html?id=GTM-WDKMR7" height="0" width="0" style="display: none; visibility: hidden;"></iframe></noscript><!-- End Google Tag Manager--><!--if lt IE 8p.browsehappy
+    |You are using an
+    strong
+        |outdated browser
+    |. Please
+    a(href="http://browsehappy.com/")
+        |upgrade your browser
+    |to improve your experience.
+--><div id="wrap"><div role="navigation" class="navbar navbar-ornament navbar-fixed-top"><div class="container"><div class="navbar-header"><a href="/" class="navbar-brand">marisks # code</a></div></div></div><div class="container"><div class="row"><div class="col-sm-8"><article><header><h1>Calling async methods within Episerver events</h1><p class="meta"><time datetime="2017-04-02T00:00:00.000Z">Sun Apr 02 2017</time></p></header><div class="lead"><p>In the article <a href="/2017/02/12/better-event-handling-in-episerver/">Better event handling in Episerver</a>, I wrote how to handle <em>Episerver</em> events. I was calling the async <em>Publish</em> method of mediator in the fire and forget manner. But it is not a good solution in an ASP.NET application as there is no warranty that <a href="http://stackoverflow.com/a/18509424/660154">the running task will finish</a>.</p>
+
+</div><p>As I mentioned, the first version was just calling an async method and not caring if it will finish executing.</p>
+<pre><code class="lang-charp">contentEvents.LoadingContent += ContentEvents_LoadingContent;
+
+// ...
+
+private void ContentEvents_LoadingContent(
+    object sender, EPiServer.ContentEventArgs e)
+{
+    RunMeAsync();
+}
+</code></pre>
+<p>It is unlikely that you would want the method to start running but not completing.</p>
+<p>Next reasonable solution which did work in the unit tests were <em>async</em>/<em>await</em>. I had to add <em>async</em> keyword to the event handling method and <em>await</em> to my async method call.</p>
+<pre><code class="lang-charp">private async void ContentEvents_LoadingContent(
+    object sender, EPiServer.ContentEventArgs e)
+{
+    await RunMeAsync();
+}
+</code></pre>
+<p>While this is the right way to handle events, it doesn&#39;t work in the ASP.NET context. You will get this exception if you try:</p>
+<pre><code>An asynchronous operation cannot be started at this time. Asynchronous operations may only be started within an asynchronous handler or module or during certain events in the Page lifecycle. If this exception occurred while executing a Page, ensure that the Page is marked &lt;%@ Page Async=&quot;true&quot; %&gt;. This exception may also indicate an attempt to call an &quot;async void&quot; method, which is generally unsupported within ASP.NET request processing. Instead, the asynchronous method should return a Task, and the caller should await it.
+</code></pre><p>Maybe try waiting on the task completion?</p>
+<pre><code class="lang-charp">private void ContentEvents_LoadingContent(
+    object sender, EPiServer.ContentEventArgs e)
+{
+    RunMeAsync().Wait();
+}
+</code></pre>
+<p>Initially, when I tried it, it did work, but the performance of the site was very low. I tried it on the site which was hosted on <em>IIS</em>. But then I tried it on the new <em>Alloy Tech</em> project running on the <em>IIS Express</em>, and it just never loaded. Unfortunately, waiting for an async method can cause deadlocks. Not sure where in this case.</p>
+<p>After googling for some time, I found an answer on the <a href="http://stackoverflow.com/a/5097066/660154">Stack Overflow</a>. It suggested using some <em>AsyncHelpers</em> class. I copied this over to my project, and it looked like working except when my async method threw an exception.</p>
+<p>Some more googling and I found another similar <a href="http://stackoverflow.com/a/18509424/660154">answer</a>. In this <a href="http://stackoverflow.com/a/18509424/660154">Stack Overflow thread</a>, another <em>Erik Philips</em> gave an example of another <em>AsyncHelper</em> class which is used by <em>Microsoft</em> internally.</p>
+<pre><code class="lang-charp">internal static class AsyncHelper
+{
+    private static readonly TaskFactory _myTaskFactory = new 
+      TaskFactory(CancellationToken.None, 
+                  TaskCreationOptions.None, 
+                  TaskContinuationOptions.None, 
+                  TaskScheduler.Default);
+
+    public static TResult RunSync&lt;TResult&gt;(Func&lt;Task&lt;TResult&gt;&gt; func)
+    {
+        return AsyncHelper._myTaskFactory
+          .StartNew&lt;Task&lt;TResult&gt;&gt;(func)
+          .Unwrap&lt;TResult&gt;()
+          .GetAwaiter()
+          .GetResult();
+    }
+
+    public static void RunSync(Func&lt;Task&gt; func)
+    {
+        AsyncHelper._myTaskFactory
+          .StartNew&lt;Task&gt;(func)
+          .Unwrap()
+          .GetAwaiter()
+          .GetResult();
+    }
+}
+</code></pre>
+<p>Now calling my async method from the event handler method works perfectly.</p>
+<pre><code class="lang-charp">private void ContentEvents_LoadingContent(
+    object sender, EPiServer.ContentEventArgs e)
+{
+    AsyncHelper.RunSync(RunMeAsync);
+}
+</code></pre>
+<h1 id="conclusion">Conclusion</h1>
+<p>When calling an async method from the event handler method, use the solution from <a href="http://stackoverflow.com/a/25097498/660154">this Stack Overflow answer</a> and don&#39;t try anything else :)</p>
+<p>But in all other cases (controller&#39;s action method, for example) if you can, use <em>async</em>/<em>await</em>.</p>
+</article><div id="disqus_thread"></div><script>/* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+var disqus_shortname = 'marisksblog'; // required: replace example with your forum shortname
+
+/* * * DON'T EDIT BELOW THIS LINE * * */
+(function() {
+  var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+  dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+  (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();</script><noscript>Please enable JavaScript to view the<a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a><a href="http://disqus.com" class="dsq-brlink">comments powered by<span class="logo-disqus">Disqus</span></a></noscript></div><div class="col-sm-1"><aside class="archive"><ul class="nav"><li><a href="/">2021</a></li><li><a href="/2020/">2020</a></li><li><a href="/2019/">2019</a></li><li><a href="/2018/">2018</a></li><li class="active"><a href="/2017/">2017</a></li><li><a href="/2016/">2016</a></li><li><a href="/2015/">2015</a></li><li><a href="/2014/">2014</a></li><li><a href="/2013/">2013</a></li><li><a href="/2012/">2012</a></li></ul></aside></div><div class="col-sm-3"><aside class="panel panel-default"><div class="panel-body"><div class="about"><img src="/img/common/profile_0021.jpg" alt="profile picture" class="center-block img-responsive thumbnail"><p>Hi! I'm Māris Krivtežs. I am Web developer primarily working with ASP.NET, EPiServer and front-end development at&nbsp;<a href="http://geta.no" target="_blank">Geta</a>, but same time learning different programming languages, learning new programming paradigms, architectures, and design. I spend my free time with my family, reading books, bicycling and traveling.</p></div><ul class="social"><li><a href="http://stackoverflow.com/users/660154/marisks" target="_blank"><i class="fa fa-stack-overflow"></i></a></li><li><a href="https://github.com/marisks" target="_blank"><i class="fa fa-github-alt"></i></a></li><li><a href="https://twitter.com/pioners1001" target="_blank"><i class="fa fa-twitter"></i></a></li><li><a href="http://www.linkedin.com/pub/maris-krivtezs/31/98b/b53" target="_blank"><i class="fa fa-linkedin"></i></a></li><li><a href="/rss.xml" target="_blank"><i class="fa fa-rss"></i></a></li></ul><a href="https://getadigital.com" target="_blank"><img src="/img/common/ident-geta-wordmark.svg" alt="Geta logo" class="center-block img-responsive aside-logo"></a></div></aside></div></div></div></div><div id="footer"><div class="container"><div class="container credit">Copyright &copy; 2017 Maris Krivtezs. All Rights Reserved, except for the parts enumerated below:<ul class="licence-list"><li>- The source code examples on this blog are covered by&nbsp;<a href="https://opensource.org/licenses/mit-license.php">MIT License</a>.</li><li>- This page content, excluding the visual design and the logotype, is covered by&nbsp;<a href="http://creativecommons.org/licenses/by/4.0/">Creative Commons Attribution 4.0 International License</a>.</li></ul></div></div></div><script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><script>window.jQuery || document.write('<script src="/js/vendor/jquery-1.10.2.min.js"><\/script>')</script><script  src="/bower_components/bootstrap/dist/js/bootstrap.min.js"></script><script  src="/js/plugins.js"></script><script  src="/js/main.js"></script></body>

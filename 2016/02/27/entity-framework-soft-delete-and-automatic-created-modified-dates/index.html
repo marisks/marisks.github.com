@@ -1,0 +1,194 @@
+<!DOCTYPE html><!--if lt IE 8html.no-js.lt-ie9.lt-ie8(lang="en")--><!--if IE 8html.no-js.lt-ie9(lang="en")--><!--if gt IE 8html.no-js(lang="en")--><head><meta charset="utf-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><title>Entity Framework: Soft Delete and automatic Created, Modified dates | marisks # code</title><meta name="description" content="Convention based soft delete and created and modified date setting makes your code much simpler. Configuring Entity Framework to do it is a bit complicated, but possible."><meta name="keywords" content=".NET, ASP.NET, C#, JavaScript, Optimizely, EPiServer, programming languages"><meta name="viewport" content="width=device-width, initial-scale=1"><!--Place favicon.ico and apple-touch-icon.png in the root directory--><meta name="generator" content="DocPad v6.79.4" /><!-- Google Tag Manager--><script async src="https://www.googletagmanager.com/gtag/js?id=G-540M01NJGH"></script><script>window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-540M01NJGH');</script><!-- End Google Tag Manager--><link rel="icon" sizes="16x16 32x32" href="/favicon.ico?v=1"><link  rel="stylesheet" href="/css/vendor/normalize.css" /><link  rel="stylesheet" href="/css/vendor/main.css" /><link  rel="stylesheet" href="/css/vendor/bootstrap.min.css" /><link  rel="stylesheet" href="//netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css" /><link  rel="stylesheet" href="/css/style.css" /><script src="/js/vendor/modernizr-2.6.2.min.js"></script></head><body><!-- Google Tag Manager--><noscript><iframe src="//www.googletagmanager.com/ns.html?id=GTM-WDKMR7" height="0" width="0" style="display: none; visibility: hidden;"></iframe></noscript><!-- End Google Tag Manager--><!--if lt IE 8p.browsehappy
+    |You are using an
+    strong
+        |outdated browser
+    |. Please
+    a(href="http://browsehappy.com/")
+        |upgrade your browser
+    |to improve your experience.
+--><div id="wrap"><div role="navigation" class="navbar navbar-ornament navbar-fixed-top"><div class="container"><div class="navbar-header"><a href="/" class="navbar-brand">marisks # code</a></div></div></div><div class="container"><div class="row"><div class="col-sm-8"><article><header><h1>Entity Framework: Soft Delete and automatic Created, Modified dates</h1><p class="meta"><time datetime="2016-02-27T00:00:00.000Z">Sat Feb 27 2016</time></p></header><div class="lead">Convention based soft delete and created and modified date setting makes your code much simpler. Configuring Entity Framework to do it is a bit complicated, but possible.</div><p>When working with a database, quite often it is useful to implement soft-delete of records. It simplifies related record management and also preserves some history. It is also common to have Created and Modified dates on the record. While it is possible to do soft delete and setting Created, Modified dates manually, it is error prone. Entity Framework provides an API to do it silently.</p>
+<p>When I started to look for the solution I found an article by Rakesh Babu Paruchuri: <a href="http://www.codeguru.com/csharp/csharp/soft-deleting-entities-cleanly-using-entity-framework-6-interceptors.html">Soft Deleting Entities Cleanly Using Entity Framework 6 Interceptors</a>. He uses an attribute to decorate entities with and set the name of <em>IsDeleted</em> column name. I do not like this approach because you duplicate your code - define <em>IsDeleted</em> property on the entity and also set <em>SoftDelete</em> attribute which defines which property use for soft delete. It is simpler, more consistent and less error prone to just &quot;hardcode&quot; the name of the property or allow it to be configured globally.</p>
+<h1 id="soft-delete">Soft Delete</h1>
+<p>My solution to an issue is almost same as done by Rakesh, but I am using &quot;hardcoded&quot; field name - <em>IsDeleted</em>. This way I have a consistent field name all over my application.</p>
+<pre><code>public class SoftDeleteInterceptor : IDbCommandTreeInterceptor
+{
+    public const string IsDeletedColumnName = &quot;IsDeleted&quot;;
+
+    public void TreeCreated(DbCommandTreeInterceptionContext interceptionContext)
+    {
+        if (interceptionContext.OriginalResult.DataSpace != DataSpace.SSpace)
+        {
+            return;
+        }
+
+        var queryCommand = interceptionContext.Result as DbQueryCommandTree;
+        if (queryCommand != null)
+        {
+            interceptionContext.Result = HandleQueryCommand(queryCommand);
+        }
+
+        var deleteCommand = interceptionContext.OriginalResult as DbDeleteCommandTree;
+        if (deleteCommand != null)
+        {
+            interceptionContext.Result = HandleDeleteCommand(deleteCommand);
+        }
+    }
+
+    // ...
+}
+</code></pre><p>First, create a class which implements <em>IDbCommandTreeInterceptor</em> interface&#39;s method <em>TreeCreated</em>. At this step (tree created), <em>Entity Framework&#39;s</em> full command is already built and it is possible to modify it before execution. <em>TreeCreated</em> has <em>DbCommandTreeInterceptionContext</em> parameter which has <em>Result</em> property with full command expression tree of different types - insert, delete, query, update.</p>
+<p>For soft delete, I have to handle two cases - deletion of record and querying of records.</p>
+<pre><code>private static DbCommandTree HandleDeleteCommand(DbDeleteCommandTree deleteCommand)
+{
+    var setClauses = new List&lt;DbModificationClause&gt;();
+    var table = (EntityType) deleteCommand.Target.VariableType.EdmType;
+
+    if (table.Properties.All(p =&gt; p.Name != IsDeletedColumnName))
+    {
+        return deleteCommand;
+    }
+
+    setClauses.Add(DbExpressionBuilder.SetClause(
+        deleteCommand.Target.VariableType.Variable(deleteCommand.Target.VariableName).Property(IsDeletedColumnName),
+        DbExpression.FromBoolean(true)));
+
+    return new DbUpdateCommandTree(
+        deleteCommand.MetadataWorkspace,
+        deleteCommand.DataSpace,
+        deleteCommand.Target,
+        deleteCommand.Predicate,
+        setClauses.AsReadOnly(), null);
+}
+</code></pre><p>Deletion handling is simple. First check if a table has <em>IsDeleted</em> column and then replace delete command tree with update command tree which sets <em>IsDeleted</em> to <em>true</em>.</p>
+<pre><code>private static DbCommandTree HandleQueryCommand(DbQueryCommandTree queryCommand)
+{
+    var newQuery = queryCommand.Query.Accept(new SoftDeleteQueryVisitor());
+    return new DbQueryCommandTree(
+        queryCommand.MetadataWorkspace,
+        queryCommand.DataSpace,
+        newQuery);
+}
+
+public class SoftDeleteQueryVisitor : DefaultExpressionVisitor
+{
+    public override DbExpression Visit(DbScanExpression expression)
+    {
+        var table = (EntityType)expression.Target.ElementType;
+        if (table.Properties.All(p =&gt; p.Name != IsDeletedColumnName))
+        {
+            return base.Visit(expression);
+        }
+
+        var binding = expression.Bind();
+        return binding.Filter(
+            binding.VariableType
+                .Variable(binding.VariableName)
+                .Property(IsDeletedColumnName)
+                .NotEqual(DbExpression.FromBoolean(true)));
+    }
+}
+</code></pre><p>For query handling, use helper expression visitor class - <em>SoftDeleteQueryVisitor</em>, to build new query command. <em>SoftDeleteQueryVisitor</em> visits each element of an expression tree, so if there are some joins with other tables, it will check for <em>IsDeleted</em> column there too. After it checked for <em>IsDeleted</em> column, the new filter gets applied to filter out records with <em>IsDeleted</em> column set to <em>true</em>.</p>
+<p>The last step is interceptor registration. Create a class which inherits from <em>DbConfiguration</em> - <em>Entity Framework</em> scans your application for it and runs defined configuration. In the class constructor, add a new instance of <em>SoftDeleteInterceptor</em> with <em>AddInterceptor</em> method.</p>
+<pre><code>public class EntityFrameworkConfiguration : DbConfiguration
+{
+    public EntityFrameworkConfiguration()
+    {
+        AddInterceptor(new SoftDeleteInterceptor());
+    }
+}
+</code></pre><h1 id="created-and-modified-dates">Created and Modified dates</h1>
+<p>Automatic <em>Created</em> and <em>Modified</em> date setting uses the same approach as for soft delete. I have to check for two cases - insert and update.</p>
+<pre><code>public class CreatedAndModifiedDateInterceptor : IDbCommandTreeInterceptor
+{
+    public const string CreatedColumnName = &quot;Created&quot;;
+    public const string ModifiedColumnName = &quot;Modified&quot;;
+
+    public void TreeCreated(DbCommandTreeInterceptionContext interceptionContext)
+    {
+        if (interceptionContext.OriginalResult.DataSpace != DataSpace.SSpace)
+        {
+            return;
+        }
+
+        var insertCommand = interceptionContext.Result as DbInsertCommandTree;
+        if (insertCommand != null)
+        {
+            interceptionContext.Result = HandleInsertCommand(insertCommand);
+        }
+
+        var updateCommand = interceptionContext.OriginalResult as DbUpdateCommandTree;
+        if (updateCommand != null)
+        {
+            interceptionContext.Result = HandleUpdateCommand(updateCommand);
+        }
+    }
+
+    // ...
+}
+</code></pre><p>Both commands are handled by replacing set clauses for <em>Created</em> and <em>Modified</em> date columns. Insert command replaces both - <em>Created</em> and <em>Modified</em>, but update command replaces only <em>Modified</em> column value.</p>
+<pre><code>private static DbCommandTree HandleInsertCommand(DbInsertCommandTree insertCommand)
+{
+    var now = DateTime.Now;
+
+    var setClauses = insertCommand.SetClauses
+        .Select(clause =&gt; clause.UpdateIfMatch(CreatedColumnName, DbExpression.FromDateTime(now)))
+        .Select(clause =&gt; clause.UpdateIfMatch(ModifiedColumnName, DbExpression.FromDateTime(now)))
+        .ToList();
+
+    return new DbInsertCommandTree(
+        insertCommand.MetadataWorkspace,
+        insertCommand.DataSpace,
+        insertCommand.Target,
+        setClauses.AsReadOnly(),
+        insertCommand.Returning);
+}
+
+private static DbCommandTree HandleUpdateCommand(DbUpdateCommandTree updateCommand)
+{
+    var now = DateTime.Now;
+
+    var setClauses = updateCommand.SetClauses
+        .Select(clause =&gt; clause.UpdateIfMatch(ModifiedColumnName, DbExpression.FromDateTime(now)))
+        .ToList();
+
+    return new DbUpdateCommandTree(
+        updateCommand.MetadataWorkspace,
+        updateCommand.DataSpace,
+        updateCommand.Target,
+        updateCommand.Predicate,
+        setClauses.AsReadOnly(), null);
+}
+</code></pre><p><em>UpdateIfMatch</em> is extension method which replaces clause with a new one if it&#39;s column name matches, otherwise returns original clause.</p>
+<pre><code>public static DbModificationClause UpdateIfMatch(
+    this DbModificationClause clause,
+    string property,
+    DbExpression value)
+{
+    return clause.IsFor(property)
+            ? DbExpressionBuilder.SetClause(clause.Property(), value)
+            : clause;
+}
+</code></pre><p>I am using other extensions here - <em>IsFor</em> and <em>Property</em>. Full code for extensions is available in this <a href="https://gist.github.com/marisks/3cc2e4f18048e2f0b7a5#file-extensions-cs">gist</a>.</p>
+<p>And the last step again is interceptor registration.</p>
+<pre><code>public class EntityFrameworkConfiguration : DbConfiguration
+{
+    public EntityFrameworkConfiguration()
+    {
+        AddInterceptor(new SoftDeleteInterceptor());
+        AddInterceptor(new CreatedAndModifiedDateInterceptor());
+    }
+}
+</code></pre><h1 id="summary">Summary</h1>
+<p>Convention based soft delete and created and modified date setting makes your code much simpler. Configuring <em>Entity Framework</em> to do it is a bit complicated but possible.</p>
+</article><div id="disqus_thread"></div><script>/* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+var disqus_shortname = 'marisksblog'; // required: replace example with your forum shortname
+
+/* * * DON'T EDIT BELOW THIS LINE * * */
+(function() {
+  var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+  dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+  (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();</script><noscript>Please enable JavaScript to view the<a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a><a href="http://disqus.com" class="dsq-brlink">comments powered by<span class="logo-disqus">Disqus</span></a></noscript></div><div class="col-sm-1"><aside class="archive"><ul class="nav"><li><a href="/">2021</a></li><li><a href="/2020/">2020</a></li><li><a href="/2019/">2019</a></li><li><a href="/2018/">2018</a></li><li><a href="/2017/">2017</a></li><li class="active"><a href="/2016/">2016</a></li><li><a href="/2015/">2015</a></li><li><a href="/2014/">2014</a></li><li><a href="/2013/">2013</a></li><li><a href="/2012/">2012</a></li></ul></aside></div><div class="col-sm-3"><aside class="panel panel-default"><div class="panel-body"><div class="about"><img src="/img/common/profile_0021.jpg" alt="profile picture" class="center-block img-responsive thumbnail"><p>Hi! I'm Māris Krivtežs. I am Web developer primarily working with ASP.NET, EPiServer and front-end development at&nbsp;<a href="http://geta.no" target="_blank">Geta</a>, but same time learning different programming languages, learning new programming paradigms, architectures, and design. I spend my free time with my family, reading books, bicycling and traveling.</p></div><ul class="social"><li><a href="http://stackoverflow.com/users/660154/marisks" target="_blank"><i class="fa fa-stack-overflow"></i></a></li><li><a href="https://github.com/marisks" target="_blank"><i class="fa fa-github-alt"></i></a></li><li><a href="https://twitter.com/pioners1001" target="_blank"><i class="fa fa-twitter"></i></a></li><li><a href="http://www.linkedin.com/pub/maris-krivtezs/31/98b/b53" target="_blank"><i class="fa fa-linkedin"></i></a></li><li><a href="/rss.xml" target="_blank"><i class="fa fa-rss"></i></a></li></ul><a href="https://getadigital.com" target="_blank"><img src="/img/common/ident-geta-wordmark.svg" alt="Geta logo" class="center-block img-responsive aside-logo"></a></div></aside></div></div></div></div><div id="footer"><div class="container"><div class="container credit">Copyright &copy; 2017 Maris Krivtezs. All Rights Reserved, except for the parts enumerated below:<ul class="licence-list"><li>- The source code examples on this blog are covered by&nbsp;<a href="https://opensource.org/licenses/mit-license.php">MIT License</a>.</li><li>- This page content, excluding the visual design and the logotype, is covered by&nbsp;<a href="http://creativecommons.org/licenses/by/4.0/">Creative Commons Attribution 4.0 International License</a>.</li></ul></div></div></div><script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><script>window.jQuery || document.write('<script src="/js/vendor/jquery-1.10.2.min.js"><\/script>')</script><script  src="/bower_components/bootstrap/dist/js/bootstrap.min.js"></script><script  src="/js/plugins.js"></script><script  src="/js/main.js"></script></body>

@@ -1,0 +1,87 @@
+<!DOCTYPE html><!--if lt IE 8html.no-js.lt-ie9.lt-ie8(lang="en")--><!--if IE 8html.no-js.lt-ie9(lang="en")--><!--if gt IE 8html.no-js(lang="en")--><head><meta charset="utf-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><title>Getting started with Vim on Windows | marisks # code</title><meta name="description" content="I am not a new Vim user, but I have never used it as my main editor. I've learned the basic movement and editing commands, which I am using in Vi modes in different editors - Sublime Text's Vi mode, Visual Studio's extension - VsVim, and others. As now Vim can be used as fully featured C# (by Omnisharp) and F# (by vim-fsharp) environment, I want to use Vim as my main development environment. The first step for that is installing and setting up basic configuration."><meta name="keywords" content=".NET, ASP.NET, C#, JavaScript, Optimizely, EPiServer, programming languages"><meta name="viewport" content="width=device-width, initial-scale=1"><!--Place favicon.ico and apple-touch-icon.png in the root directory--><meta name="generator" content="DocPad v6.79.4" /><!-- Google Tag Manager--><script async src="https://www.googletagmanager.com/gtag/js?id=G-540M01NJGH"></script><script>window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-540M01NJGH');</script><!-- End Google Tag Manager--><link rel="icon" sizes="16x16 32x32" href="/favicon.ico?v=1"><link  rel="stylesheet" href="/css/vendor/normalize.css" /><link  rel="stylesheet" href="/css/vendor/main.css" /><link  rel="stylesheet" href="/css/vendor/bootstrap.min.css" /><link  rel="stylesheet" href="//netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css" /><link  rel="stylesheet" href="/css/style.css" /><script src="/js/vendor/modernizr-2.6.2.min.js"></script></head><body><!-- Google Tag Manager--><noscript><iframe src="//www.googletagmanager.com/ns.html?id=GTM-WDKMR7" height="0" width="0" style="display: none; visibility: hidden;"></iframe></noscript><!-- End Google Tag Manager--><!--if lt IE 8p.browsehappy
+    |You are using an
+    strong
+        |outdated browser
+    |. Please
+    a(href="http://browsehappy.com/")
+        |upgrade your browser
+    |to improve your experience.
+--><div id="wrap"><div role="navigation" class="navbar navbar-ornament navbar-fixed-top"><div class="container"><div class="navbar-header"><a href="/" class="navbar-brand">marisks # code</a></div></div></div><div class="container"><div class="row"><div class="col-sm-8"><article><header><h1>Getting started with Vim on Windows</h1><p class="meta"><time datetime="2015-10-14T00:00:00.000Z">Wed Oct 14 2015</time></p></header><div class="lead"><p>I am not a new <em>Vim</em> user, but I have never used it as my main editor. I&#39;ve learned the basic movement and editing commands, which I am using in <em>Vi</em> modes in different editors - <em>Sublime Text&#39;s Vi</em> mode, <em>Visual Studio&#39;s</em> extension - <em>VsVim</em>, and others. As now <em>Vim</em> can be used as fully featured C# (by <a href="http://www.omnisharp.net/">Omnisharp</a>) and F# (by <a href="https://github.com/fsharp/vim-fsharp">vim-fsharp</a>) environment, I want to use <em>Vim</em> as my main development environment. The first step for that is installing and setting up basic configuration.</p>
+
+</div><h1 id="installing-conemu">Installing ConEmu</h1>
+<p>I&#39;d like to use <em>Vim</em> in the terminal and <a href="http://conemu.github.io/">ConEmu</a> console emulator is a good fit for my needs. As I am <a href="https://chocolatey.org/">Chocolatey</a> user, installation is easy - just type in command in console:</p>
+<pre><code>choco install conemu
+</code></pre><p>Then configured it to use <em>Solarized</em> theme and start <em>PowerShell</em> by default.</p>
+<h1 id="installing-vim">Installing Vim</h1>
+<p>Same as with <em>ConEmu</em>, install <em>Vim</em> using <em>Chocolatey</em>:</p>
+<pre><code>choco install vim
+</code></pre><h1 id="basic-vim-configuration">Basic Vim configuration</h1>
+<p>Open the terminal (<em>ConEmu</em>) and <em>CD</em> into the home folder (usually <em>C:\Users\YourUserName</em>). Create <em>Vim</em> configuration file <em>.vimrc</em> here:</p>
+<pre><code>echo $null &gt;&gt; .vimrc
+</code></pre><p>Open <em>.vimrc</em> and add following lines:</p>
+<pre><code>&quot; Enable syntax highlighting
+syntax on
+
+&quot; Enable auto indentation custom per file type
+filetype plugin indent on
+
+&quot; Set tabs to 4 space chars
+set tabstop=8 softtabstop=0 expandtab shiftwidth=4 smarttab
+
+&quot; Set backspace behavior in insert mode
+set backspace=indent,eol,start
+
+&quot; Disable beeps
+set noerrorbells visualbell t_vb=
+autocmd GUIEnter * set visualbell t_vb=
+</code></pre><p>All settings are described well with comments except auto indentation. As described in <a href="http://vim.wikia.com/wiki/Indenting_source_code#File-type_based_indentation">Vim Wiki</a> <em>filetype plugin indent on</em> allows to customize indentation per file type and it will use indentation scripts located in the <em>indent</em> folder of <em>Vim</em> installation.</p>
+<h1 id="install-pathogen-plugin-manager">Install Pathogen plugin manager</h1>
+<p><em>Vim</em> has lots of different useful plugins, but managing those manually might be hard. <a href="https://github.com/tpope/vim-pathogen">Pathogen</a> is a tool which manages <em>Vim&#39;s</em> <em>runtimepath</em> so that is easy to locate plugins.</p>
+<p>To install <em>Pathogen</em> first create new folder <em>vimfiles</em> and two sub-folders - <em>autoload</em> and <em>bundle</em> in your home directory:</p>
+<pre><code>mkdir vimfiles\autoload
+mkdir vimfiles\bundle
+</code></pre><p>Then download <em>Pathogen</em> into <em>vimfiles\autoload</em> directory:</p>
+<pre><code>curl -OutFile vimfiles\autoload\pathogen.vim https://tpo.pe/pathogen.vim
+</code></pre><p>Now configure <em>Vim</em> to use it. Open <em>.vimrc</em> file and on the top add this line:</p>
+<pre><code>execute pathogen#infect()
+</code></pre><h1 id="colors-and-themes">Colors and themes</h1>
+<p><em>ConEmu</em> supports terminal with 256 colors and it is possible to configure <em>Vim</em> to use color syntax highlighting in it. There are some issues with different <em>Vim</em> versions and color schemes which is described on <a href="http://conemu.github.io/en/VimXterm.html">ConEmu page</a>.</p>
+<p>Before enabling colors in <em>Vim</em>, install the theme first. I am using <a href="https://github.com/jnurmine/Zenburn">zenburn</a> theme.</p>
+<pre><code>git clone https://github.com/jnurmine/Zenburn vimfiles\bundle\zenburn
+</code></pre><p>Now configure <em>Vim</em> to use 265 colors in terminal (as described on <a href="http://conemu.github.io/en/VimXterm.html#requirements">ConEmu page</a>) and set theme:</p>
+<pre><code>&quot; Set colors in console
+if !has(&quot;gui_running&quot;)
+    set term=xterm
+    set t_Co=256
+    let &amp;t_AB=&quot;\e[48;5;%dm&quot;
+    let &amp;t_AF=&quot;\e[38;5;%dm&quot;
+    colorscheme zenburn
+endif
+</code></pre><h1 id="known-issues">Known issues</h1>
+<h2 id="issue-with-key-bindings">Issue with key bindings</h2>
+<p>After installation and configuration I tried <em>Vim&#39;s</em> <em>:help</em> to find out how to start <em>vimtutor</em> - interactive <em>Vim&#39;s</em> tutorial. The issue I came up was that I was unable to navigate to required section with keys - <em>Ctrl+]</em>. Unfortunately it doesn&#39;t work and it seems that <em>Ctrl</em> is ignored - only <em>]</em> gets sent as command. I tried to find solution to enable this key combination, but couldn&#39;t find any. Only solution is to remap it to different keys. So I remapped it to use <em>F3</em> key. Add these lines to your <em>.vimrc</em> to remap it:</p>
+<pre><code>&quot; Key mappings
+map &lt;F3&gt; &lt;C-]&gt;
+</code></pre><h2 id="issue-with-colors">Issue with colors</h2>
+<p>Sometimes colors look strange when scrolling, but it is ok to live with that.</p>
+<h1 id="tips">Tips</h1>
+<p>Copying/pasting in <em>Vim</em> is quite different than in other editors and sometimes you have to copy into <em>Window&#39;s</em> clipboard. To do that use copying into the <em>+</em> buffer. Select the text and type command:</p>
+<pre><code>&quot;+y
+</code></pre><p>For novice user this command might look strange, but is quite simple:</p>
+<ul>
+<li><em>&quot;</em> - means that you are using named buffer,</li>
+<li><em>+</em> - is the name of the buffer - <em>+</em> in <em>Windows</em> is <em>Clipboard</em>,</li>
+<li><em>y</em> - is copying (yank) command.</li>
+</ul>
+</article><div id="disqus_thread"></div><script>/* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+var disqus_shortname = 'marisksblog'; // required: replace example with your forum shortname
+
+/* * * DON'T EDIT BELOW THIS LINE * * */
+(function() {
+  var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+  dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+  (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();</script><noscript>Please enable JavaScript to view the<a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a><a href="http://disqus.com" class="dsq-brlink">comments powered by<span class="logo-disqus">Disqus</span></a></noscript></div><div class="col-sm-1"><aside class="archive"><ul class="nav"><li><a href="/">2021</a></li><li><a href="/2020/">2020</a></li><li><a href="/2019/">2019</a></li><li><a href="/2018/">2018</a></li><li><a href="/2017/">2017</a></li><li><a href="/2016/">2016</a></li><li class="active"><a href="/2015/">2015</a></li><li><a href="/2014/">2014</a></li><li><a href="/2013/">2013</a></li><li><a href="/2012/">2012</a></li></ul></aside></div><div class="col-sm-3"><aside class="panel panel-default"><div class="panel-body"><div class="about"><img src="/img/common/profile_0021.jpg" alt="profile picture" class="center-block img-responsive thumbnail"><p>Hi! I'm Māris Krivtežs. I am Web developer primarily working with ASP.NET, EPiServer and front-end development at&nbsp;<a href="http://geta.no" target="_blank">Geta</a>, but same time learning different programming languages, learning new programming paradigms, architectures, and design. I spend my free time with my family, reading books, bicycling and traveling.</p></div><ul class="social"><li><a href="http://stackoverflow.com/users/660154/marisks" target="_blank"><i class="fa fa-stack-overflow"></i></a></li><li><a href="https://github.com/marisks" target="_blank"><i class="fa fa-github-alt"></i></a></li><li><a href="https://twitter.com/pioners1001" target="_blank"><i class="fa fa-twitter"></i></a></li><li><a href="http://www.linkedin.com/pub/maris-krivtezs/31/98b/b53" target="_blank"><i class="fa fa-linkedin"></i></a></li><li><a href="/rss.xml" target="_blank"><i class="fa fa-rss"></i></a></li></ul><a href="https://getadigital.com" target="_blank"><img src="/img/common/ident-geta-wordmark.svg" alt="Geta logo" class="center-block img-responsive aside-logo"></a></div></aside></div></div></div></div><div id="footer"><div class="container"><div class="container credit">Copyright &copy; 2017 Maris Krivtezs. All Rights Reserved, except for the parts enumerated below:<ul class="licence-list"><li>- The source code examples on this blog are covered by&nbsp;<a href="https://opensource.org/licenses/mit-license.php">MIT License</a>.</li><li>- This page content, excluding the visual design and the logotype, is covered by&nbsp;<a href="http://creativecommons.org/licenses/by/4.0/">Creative Commons Attribution 4.0 International License</a>.</li></ul></div></div></div><script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><script>window.jQuery || document.write('<script src="/js/vendor/jquery-1.10.2.min.js"><\/script>')</script><script  src="/bower_components/bootstrap/dist/js/bootstrap.min.js"></script><script  src="/js/plugins.js"></script><script  src="/js/main.js"></script></body>

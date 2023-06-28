@@ -1,0 +1,135 @@
+<!DOCTYPE html><!--if lt IE 8html.no-js.lt-ie9.lt-ie8(lang="en")--><!--if IE 8html.no-js.lt-ie9(lang="en")--><!--if gt IE 8html.no-js(lang="en")--><head><meta charset="utf-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><title>Market routing in Episerver Commerce | marisks # code</title><meta name="description" content="The most of the Episerver Commerce project examples (for example, Quicksilver) are using cookies to store selected market. The URL doesn't change which can cause several SEO issues. Crawlers are not able to index market specific content. If the market info could be included in the URL, it would solve most of these problems."><meta name="keywords" content=".NET, ASP.NET, C#, JavaScript, Optimizely, EPiServer, programming languages"><meta name="viewport" content="width=device-width, initial-scale=1"><!--Place favicon.ico and apple-touch-icon.png in the root directory--><meta name="generator" content="DocPad v6.79.4" /><!-- Google Tag Manager--><script async src="https://www.googletagmanager.com/gtag/js?id=G-540M01NJGH"></script><script>window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-540M01NJGH');</script><!-- End Google Tag Manager--><link rel="icon" sizes="16x16 32x32" href="/favicon.ico?v=1"><link  rel="stylesheet" href="/css/vendor/normalize.css" /><link  rel="stylesheet" href="/css/vendor/main.css" /><link  rel="stylesheet" href="/css/vendor/bootstrap.min.css" /><link  rel="stylesheet" href="//netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css" /><link  rel="stylesheet" href="/css/style.css" /><script src="/js/vendor/modernizr-2.6.2.min.js"></script></head><body><!-- Google Tag Manager--><noscript><iframe src="//www.googletagmanager.com/ns.html?id=GTM-WDKMR7" height="0" width="0" style="display: none; visibility: hidden;"></iframe></noscript><!-- End Google Tag Manager--><!--if lt IE 8p.browsehappy
+    |You are using an
+    strong
+        |outdated browser
+    |. Please
+    a(href="http://browsehappy.com/")
+        |upgrade your browser
+    |to improve your experience.
+--><div id="wrap"><div role="navigation" class="navbar navbar-ornament navbar-fixed-top"><div class="container"><div class="navbar-header"><a href="/" class="navbar-brand">marisks # code</a></div></div></div><div class="container"><div class="row"><div class="col-sm-8"><article><header><h1>Market routing in Episerver Commerce</h1><p class="meta"><time datetime="2017-09-28T00:00:00.000Z">Thu Sep 28 2017</time></p></header><div class="lead"><p>The most of the Episerver Commerce project examples (for example, <a href="https://github.com/episerver/Quicksilver/">Quicksilver</a>) are using cookies to store selected market. The URL doesn&#39;t change which can cause several SEO issues. Crawlers are not able to index market specific content. If the market info could be included in the URL, it would solve most of these problems.</p>
+
+</div><p>The solution to this problem is not trivial. There are some great articles about custom routing in <em>Episerver</em> - <a href="http://joelabrahamsson.com/custom-routing-for-episerver-content/">Custom routing for EPiServer content</a> and <a href="http://www.jondjones.com/learn-episerver-cms/episerver-developers-guide/episerver-routing/episerver-segments-explained-registering-custom-routes-in-episerver">Episerver segments explained, registering custom routes in Episerver</a>. But these articles do not have a complete solution for the market routing.</p>
+<p>I wanted to make URLs to look like this: <a href="http://mysite.com/en/europe/products">http://mysite.com/en/europe/products</a>, where <em>europe</em> is a market ID.</p>
+<p>The first task is to create a special segment for the market.</p>
+<pre><code class="lang-csharp">public class MarketSegment : SegmentBase
+{
+    private readonly IMarketService _marketService;
+    private readonly ICurrentMarket _currentMarket;
+
+    public const string SegmentName = &quot;market&quot;;
+
+    public MarketSegment(IMarketService marketService, ICurrentMarket currentMarket)
+        : base(SegmentName)
+    {
+        if (marketService == null) throw new ArgumentNullException(nameof(marketService));
+        if (currentMarket == null) throw new ArgumentNullException(nameof(currentMarket));
+        _marketService = marketService;
+        _currentMarket = currentMarket;
+    }
+
+    public override bool RouteDataMatch(SegmentContext context)
+    {
+        var segmentPair = context.GetNextValue(context.RemainingPath);
+        var marketCode = segmentPair.Next;
+
+        if (!string.IsNullOrEmpty(marketCode))
+        {
+            return ProcessSegment(context, segmentPair);
+        }
+
+        if (context.Defaults.ContainsKey(Name))
+        {
+            context.RouteData.Values[Name] = context.Defaults[Name];
+            return true;
+        }
+
+        return false;
+    }
+
+    public override string GetVirtualPathSegment(RequestContext requestContext, RouteValueDictionary values)
+    {
+        var contentLink = requestContext.GetRouteValue(&quot;node&quot;, values) as ContentReference;
+        if (ContentReference.IsNullOrEmpty(contentLink)) // Skips for non-content items.
+        {
+            return null;
+        }
+
+        var currentMarket = _currentMarket.GetCurrentMarket();
+        return currentMarket.MarketId.Value.ToLower();
+    }
+
+    private bool ProcessSegment(SegmentContext context, SegmentPair segmentPair)
+    {
+        var marketCode = segmentPair.Next;
+        var marketId = new MarketId(marketCode);
+        var market = _marketService.GetMarket(marketId);
+        if (market == null) return false;
+
+        context.RouteData.Values[Name] = marketCode;
+        context.RemainingPath = segmentPair.Remaining;
+
+        _currentMarket.SetCurrentMarket(marketId);
+
+        return true;
+    }
+}
+</code></pre>
+<p>Here the market segment inherits from the <em>SegmentBase</em> class which provides default behavior. You have to override two methods - <em>RouteDataMatch</em> and <em>GetVirtualPathSegment</em>. </p>
+<p>The <em>RouteDataMatch</em> method is used for URL interpretation - here you check if your segment is found in the URL and do the actions based on the segment value. Here I am getting the next segment value which should be my market segment. The next segment depends on already parsed segments. As the first segment is used for language, the second one will be the market segment. If the segment has value, I am trying to interpret it. I am just checking if the market with such code exists. If it does, then I am setting the current market value. Additionally, I am adding market info to the <em>RouteData</em>.</p>
+<p>The <em>GetVirtualPathSegment</em> method is used to generate URL of content. Here you provide the value for your segment in the URL. In my case, it is checking if the content is <em>Episerver</em> content and then returns a current market ID value. This value then will be presented in the URLs.</p>
+<p>The next step requires some &quot;hacking.&quot; I have to register my custom segment with a custom content route. But I must put it before any default <em>Episerver</em> route. Otherwise, it will not be picked. By default, <em>Episerver</em> has only one extension method for adding content routes - <em>MapContentRoute</em>. It appends the route at the end. So I have created an extension method to insert route at any position. I will not list it here as it is quite long, but you can find it on <a href="https://github.com/marisks/examples/blob/master/MarketRouting/Quicksilver/Sources/EPiServer.Reference.Commerce.Site/Features/Market/Routing/RouteCollectionExtensions.cs#L49">Github</a>.</p>
+<p>Now register the segment and the custom route.</p>
+<pre><code class="lang-csharp">public static void MapMarketSegment(this RouteCollection routes)
+{
+    var segment = new MarketSegment(MarketService, CurrentMarket);
+    var segmentMappings = new Dictionary&lt;string, ISegment&gt; { { MarketSegment.SegmentName, segment } };
+    var parameters = new MapContentRouteParameters
+    {
+        Direction = SupportedDirection.Both,
+        SegmentMappings = segmentMappings
+    };
+    routes.InsertAndMapContentRoute(
+        index: routes.IndexOf(&quot;pages&quot;),
+        name: MarketSegment.SegmentName,
+        url: &quot;{language}/{market}/{node}/{partial}/{action}&quot;,
+        defaults: new { action = &quot;index&quot; },
+        parameters: parameters);
+}
+
+public static int IndexOf(this RouteCollection routes, string name)
+{
+    var defaultRoute = routes
+        .Select(r =&gt; r as DefaultContentRoute)
+        .Where(x =&gt; x != null)
+        .First(x =&gt; x.Name.Equals(name, StringComparison.InvariantCultureIgnoreCase));
+    return routes.IndexOf(defaultRoute);
+}
+</code></pre>
+<p>First, create a market segment and provide all the necessary services to it. Then create content route parameters with our segment. The last step is inserting the new content route. I have added it before the <em>pages</em> route which is the default route for <em>Episerver</em> content.</p>
+<p>The last step is calling this <em>MapMarketSegment</em> in the <em>Global.asax.cs</em> on <em>RegisterRoutes</em>. Make sure to call it after base route registration.</p>
+<pre><code class="lang-csharp">protected override void RegisterRoutes(RouteCollection routes)
+{
+    base.RegisterRoutes(routes);
+
+    routes.MapRoute(
+        name: &quot;Default&quot;,
+        url: &quot;{controller}/{action}/{id}&quot;,
+        defaults: new { action = &quot;Index&quot;, id = UrlParameter.Optional });
+
+    RouteTable.Routes.MapMarketSegment();
+}
+</code></pre>
+<p>Now, you should be able to see markets in the URL and change the market by changing the market ID in the URL.</p>
+<p>I have created an example project based on the Quicksilver. The project is available on <a href="https://github.com/marisks/examples/tree/master/MarketRouting">Github</a>.</p>
+</article><div id="disqus_thread"></div><script>/* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+var disqus_shortname = 'marisksblog'; // required: replace example with your forum shortname
+
+/* * * DON'T EDIT BELOW THIS LINE * * */
+(function() {
+  var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+  dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+  (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();</script><noscript>Please enable JavaScript to view the<a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a><a href="http://disqus.com" class="dsq-brlink">comments powered by<span class="logo-disqus">Disqus</span></a></noscript></div><div class="col-sm-1"><aside class="archive"><ul class="nav"><li><a href="/">2021</a></li><li><a href="/2020/">2020</a></li><li><a href="/2019/">2019</a></li><li><a href="/2018/">2018</a></li><li class="active"><a href="/2017/">2017</a></li><li><a href="/2016/">2016</a></li><li><a href="/2015/">2015</a></li><li><a href="/2014/">2014</a></li><li><a href="/2013/">2013</a></li><li><a href="/2012/">2012</a></li></ul></aside></div><div class="col-sm-3"><aside class="panel panel-default"><div class="panel-body"><div class="about"><img src="/img/common/profile_0021.jpg" alt="profile picture" class="center-block img-responsive thumbnail"><p>Hi! I'm Māris Krivtežs. I am Web developer primarily working with ASP.NET, EPiServer and front-end development at&nbsp;<a href="http://geta.no" target="_blank">Geta</a>, but same time learning different programming languages, learning new programming paradigms, architectures, and design. I spend my free time with my family, reading books, bicycling and traveling.</p></div><ul class="social"><li><a href="http://stackoverflow.com/users/660154/marisks" target="_blank"><i class="fa fa-stack-overflow"></i></a></li><li><a href="https://github.com/marisks" target="_blank"><i class="fa fa-github-alt"></i></a></li><li><a href="https://twitter.com/pioners1001" target="_blank"><i class="fa fa-twitter"></i></a></li><li><a href="http://www.linkedin.com/pub/maris-krivtezs/31/98b/b53" target="_blank"><i class="fa fa-linkedin"></i></a></li><li><a href="/rss.xml" target="_blank"><i class="fa fa-rss"></i></a></li></ul><a href="https://getadigital.com" target="_blank"><img src="/img/common/ident-geta-wordmark.svg" alt="Geta logo" class="center-block img-responsive aside-logo"></a></div></aside></div></div></div></div><div id="footer"><div class="container"><div class="container credit">Copyright &copy; 2017 Maris Krivtezs. All Rights Reserved, except for the parts enumerated below:<ul class="licence-list"><li>- The source code examples on this blog are covered by&nbsp;<a href="https://opensource.org/licenses/mit-license.php">MIT License</a>.</li><li>- This page content, excluding the visual design and the logotype, is covered by&nbsp;<a href="http://creativecommons.org/licenses/by/4.0/">Creative Commons Attribution 4.0 International License</a>.</li></ul></div></div></div><script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><script>window.jQuery || document.write('<script src="/js/vendor/jquery-1.10.2.min.js"><\/script>')</script><script  src="/bower_components/bootstrap/dist/js/bootstrap.min.js"></script><script  src="/js/plugins.js"></script><script  src="/js/main.js"></script></body>

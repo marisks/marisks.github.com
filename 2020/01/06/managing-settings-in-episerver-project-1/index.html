@@ -1,0 +1,90 @@
+<!DOCTYPE html><!--if lt IE 8html.no-js.lt-ie9.lt-ie8(lang="en")--><!--if IE 8html.no-js.lt-ie9(lang="en")--><!--if gt IE 8html.no-js(lang="en")--><head><meta charset="utf-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><title>Managing settings in Episerver project - part 1 | marisks # code</title><meta name="description" content="When developing the Episerver site, you usually need to store and use some settings. In this article, I will describe the most commonly used approaches for it."><meta name="keywords" content=".NET, ASP.NET, C#, JavaScript, Optimizely, EPiServer, programming languages"><meta name="viewport" content="width=device-width, initial-scale=1"><!--Place favicon.ico and apple-touch-icon.png in the root directory--><meta name="generator" content="DocPad v6.79.4" /><!-- Google Tag Manager--><script async src="https://www.googletagmanager.com/gtag/js?id=G-540M01NJGH"></script><script>window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-540M01NJGH');</script><!-- End Google Tag Manager--><link rel="icon" sizes="16x16 32x32" href="/favicon.ico?v=1"><link  rel="stylesheet" href="/css/vendor/normalize.css" /><link  rel="stylesheet" href="/css/vendor/main.css" /><link  rel="stylesheet" href="/css/vendor/bootstrap.min.css" /><link  rel="stylesheet" href="//netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css" /><link  rel="stylesheet" href="/css/style.css" /><script src="/js/vendor/modernizr-2.6.2.min.js"></script></head><body><!-- Google Tag Manager--><noscript><iframe src="//www.googletagmanager.com/ns.html?id=GTM-WDKMR7" height="0" width="0" style="display: none; visibility: hidden;"></iframe></noscript><!-- End Google Tag Manager--><!--if lt IE 8p.browsehappy
+    |You are using an
+    strong
+        |outdated browser
+    |. Please
+    a(href="http://browsehappy.com/")
+        |upgrade your browser
+    |to improve your experience.
+--><div id="wrap"><div role="navigation" class="navbar navbar-ornament navbar-fixed-top"><div class="container"><div class="navbar-header"><a href="/" class="navbar-brand">marisks # code</a></div></div></div><div class="container"><div class="row"><div class="col-sm-8"><article><header><h1>Managing settings in Episerver project - part 1</h1><p class="meta"><time datetime="2020-01-06T00:00:00.000Z">Mon Jan 06 2020</time></p></header><div class="lead"><p>When developing the Episerver site, you usually need to store and use some settings. In this article, I will describe the most commonly used approaches for it.</p>
+
+</div><h1 id="appsettings-in-web-config">appSettings in Web.config</h1>
+<p>In the ASP.NET world (.NET Framework, not Core), the most common place for settings is the <code>appSettings</code> section in the <em>Web.config</em> file. You can configure solution-wide settings here. It is possible to add transformations for different environments where you are deploying the application.</p>
+<p>Also, you can add &quot;partial&quot; settings in a separate file. This is useful when each developer has their own settings. Just add the &quot;partial&quot; file to the <code>.gitignore</code>, and in the <em>Web.config</em> on the <em>appSettings</em> tag, add <code>file</code> attribute that points to your &quot;partial&quot; settings file.</p>
+<pre><code class="lang-xml">&lt;appSettings file=&quot;appSettings.dev.config&quot;&gt;
+  &lt;add key=&quot;MySetting&quot; value=&quot;The configuration&quot;&gt;
+&lt;/appSettings&gt;
+</code></pre>
+<p>Once you configured your application, you can retrieve settings using <code>ConfigurarionManager</code>.</p>
+<pre><code class="lang-csharp">var mySetting = ConfigurationManager.AppSettings[&quot;MySetting&quot;];
+</code></pre>
+<p>It returns a string value. If you need another type, you have to cast to it.</p>
+<h2 id="pros">Pros</h2>
+<ul>
+<li>Built-in ASP.NET feature.</li>
+<li>Easy to use.</li>
+<li>Transformations allow creating separate setting values for different environments.</li>
+</ul>
+<h2 id="cons">Cons</h2>
+<ul>
+<li>Unable to change values in runtime. Requires re-deploy.</li>
+<li>By default, everything is a string. You need to cast to other types.</li>
+<li>Unable to store complex types without serializing to some string format (comma-separated strings, XML, JSON).</li>
+</ul>
+<h1 id="custom-settings-section-in-web-config">Custom settings section in Web.config</h1>
+<p>A custom settings section is a good alternative to <code>appSettings</code>. It is harder to implement and use, but has several benefits over <code>appSettings</code>. With it, you do not mix your settings with other application settings.</p>
+<p>I will not cover creating a custom configuration section here, but Joel Abrahamsson has a excellent article about it: <a href="http://joelabrahamsson.com/creating-a-custom-configuration-section-in-net/">Creating a custom Configuration Section in .NET</a>.</p>
+<h2 id="pros">Pros</h2>
+<ul>
+<li>Built-in ASP.NET feature.</li>
+<li>Separates your settings from other application settings.</li>
+<li>Transformations allow creating separate setting values for different environments.</li>
+<li>You can create complex types using configuration Elements and Collections.</li>
+</ul>
+<h2 id="cons">Cons</h2>
+<ul>
+<li>More complex implementation and usage than <code>appSettings</code>.</li>
+<li>Unable to change values in runtime. Requires re-deploy.</li>
+<li>Properties of the configuration are still just strings, and you need to cast those to other types.</li>
+</ul>
+<h1 id="settings-on-the-start-page">Settings on the Start page</h1>
+<p>It is quite common to use a start page as setting storage in Episerver projects. You can add properties on the start page and configure it to display on the separate tab.</p>
+<pre><code class="lang-csharp">[Display(GroupName = GroupNames.Settings, Order = 100)]
+public virtual ContentReference MyLink { get; set; }
+</code></pre>
+<p>Then you can use Episerver API to load the start page and use the setting.</p>
+<pre><code class="lang-csharp">var startPage = _contentLoader.Get&lt;StartPage&gt;(ContentReference.StartPage);
+var myLink = startPage.MyLink;
+</code></pre>
+<p>When using a start page, you can define properties of any type Episerver has support. You can use integers, strings, content references, or even use blocks for complex types. A full list of supported types can be found here: <a href="https://world.episerver.com/documentation/developer-guides/CMS/Content/Properties/built-in-property-types/">Built-in property types</a>.</p>
+<p>Another advantage of using the start page is UI. You can easily change settings by opening the start page, changing settings, and then publishing the page. For example, it can be used for &quot;feature switching&quot; to enable/disable some functionality on the site.</p>
+<h2 id="pros">Pros</h2>
+<ul>
+<li>Easy to use Episerver API.</li>
+<li>Multi-language settings.</li>
+<li>It can be changed in runtime.</li>
+<li>Configure from UI.</li>
+</ul>
+<h2 id="cons">Cons</h2>
+<ul>
+<li>Environment specific configuration should be configured manually in each environment.</li>
+<li>The start page is not specifically built for settings.</li>
+</ul>
+<h1 id="summary">Summary</h1>
+<p>As you see in this article, each approach for storing and using settings has its advantages and disadvantages. So all approaches also have their use cases.</p>
+<p><code>appSettings</code> and custom configuration sections are great for a configuration that differs by the environment. Also, you would not want to setup settings that often change in <code>Web.config</code>. So this is the right place for settings that are required for 3rd party API integration, some connection details, etc.</p>
+<p>The start page can be used for settings that you might change often or should be changed at runtime. As I mentioned previously, it is the right place for &quot;feature switching.&quot; Also, you would not want to setup settings on the start page when you need those different in different environments.</p>
+<p>The right decision where and how to store settings should be made by a project team depending on requirements.</p>
+<p>In the next article, I will describe other options you can use and better organize settings in Episerver.</p>
+</article><div id="disqus_thread"></div><script>/* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+var disqus_shortname = 'marisksblog'; // required: replace example with your forum shortname
+
+/* * * DON'T EDIT BELOW THIS LINE * * */
+(function() {
+  var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+  dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+  (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();</script><noscript>Please enable JavaScript to view the<a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a><a href="http://disqus.com" class="dsq-brlink">comments powered by<span class="logo-disqus">Disqus</span></a></noscript></div><div class="col-sm-1"><aside class="archive"><ul class="nav"><li><a href="/">2021</a></li><li class="active"><a href="/2020/">2020</a></li><li><a href="/2019/">2019</a></li><li><a href="/2018/">2018</a></li><li><a href="/2017/">2017</a></li><li><a href="/2016/">2016</a></li><li><a href="/2015/">2015</a></li><li><a href="/2014/">2014</a></li><li><a href="/2013/">2013</a></li><li><a href="/2012/">2012</a></li></ul></aside></div><div class="col-sm-3"><aside class="panel panel-default"><div class="panel-body"><div class="about"><img src="/img/common/profile_0021.jpg" alt="profile picture" class="center-block img-responsive thumbnail"><p>Hi! I'm Māris Krivtežs. I am Web developer primarily working with ASP.NET, EPiServer and front-end development at&nbsp;<a href="http://geta.no" target="_blank">Geta</a>, but same time learning different programming languages, learning new programming paradigms, architectures, and design. I spend my free time with my family, reading books, bicycling and traveling.</p></div><ul class="social"><li><a href="http://stackoverflow.com/users/660154/marisks" target="_blank"><i class="fa fa-stack-overflow"></i></a></li><li><a href="https://github.com/marisks" target="_blank"><i class="fa fa-github-alt"></i></a></li><li><a href="https://twitter.com/pioners1001" target="_blank"><i class="fa fa-twitter"></i></a></li><li><a href="http://www.linkedin.com/pub/maris-krivtezs/31/98b/b53" target="_blank"><i class="fa fa-linkedin"></i></a></li><li><a href="/rss.xml" target="_blank"><i class="fa fa-rss"></i></a></li></ul><a href="https://getadigital.com" target="_blank"><img src="/img/common/ident-geta-wordmark.svg" alt="Geta logo" class="center-block img-responsive aside-logo"></a></div></aside></div></div></div></div><div id="footer"><div class="container"><div class="container credit">Copyright &copy; 2017 Maris Krivtezs. All Rights Reserved, except for the parts enumerated below:<ul class="licence-list"><li>- The source code examples on this blog are covered by&nbsp;<a href="https://opensource.org/licenses/mit-license.php">MIT License</a>.</li><li>- This page content, excluding the visual design and the logotype, is covered by&nbsp;<a href="http://creativecommons.org/licenses/by/4.0/">Creative Commons Attribution 4.0 International License</a>.</li></ul></div></div></div><script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><script>window.jQuery || document.write('<script src="/js/vendor/jquery-1.10.2.min.js"><\/script>')</script><script  src="/bower_components/bootstrap/dist/js/bootstrap.min.js"></script><script  src="/js/plugins.js"></script><script  src="/js/main.js"></script></body>

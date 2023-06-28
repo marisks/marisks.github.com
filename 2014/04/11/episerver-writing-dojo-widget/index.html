@@ -1,0 +1,208 @@
+<!DOCTYPE html><!--if lt IE 8html.no-js.lt-ie9.lt-ie8(lang="en")--><!--if IE 8html.no-js.lt-ie9(lang="en")--><!--if gt IE 8html.no-js(lang="en")--><head><meta charset="utf-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><title>EPiServer: writing Dojo widget | marisks # code</title><meta name="description" content="I was working on open source library Geta Tags and wanted to improve editor user experience. Starting from EPiServer 7, EPiServer uses Dojo Toolkit for administrative interface. Searching for tutorials and articles on how to create Dojo widgets for EPiServer didn't get expected results. So I had to get through all the Dojo creation and configuration process through trial and errors. In this article I will try to describe how to create simple and more advanced Dojo widgets for EPiServer."><meta name="keywords" content=".NET, ASP.NET, C#, JavaScript, Optimizely, EPiServer, programming languages"><meta name="viewport" content="width=device-width, initial-scale=1"><!--Place favicon.ico and apple-touch-icon.png in the root directory--><meta name="generator" content="DocPad v6.79.4" /><!-- Google Tag Manager--><script async src="https://www.googletagmanager.com/gtag/js?id=G-540M01NJGH"></script><script>window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-540M01NJGH');</script><!-- End Google Tag Manager--><link rel="icon" sizes="16x16 32x32" href="/favicon.ico?v=1"><link  rel="stylesheet" href="/css/vendor/normalize.css" /><link  rel="stylesheet" href="/css/vendor/main.css" /><link  rel="stylesheet" href="/css/vendor/bootstrap.min.css" /><link  rel="stylesheet" href="//netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css" /><link  rel="stylesheet" href="/css/style.css" /><script src="/js/vendor/modernizr-2.6.2.min.js"></script></head><body><!-- Google Tag Manager--><noscript><iframe src="//www.googletagmanager.com/ns.html?id=GTM-WDKMR7" height="0" width="0" style="display: none; visibility: hidden;"></iframe></noscript><!-- End Google Tag Manager--><!--if lt IE 8p.browsehappy
+    |You are using an
+    strong
+        |outdated browser
+    |. Please
+    a(href="http://browsehappy.com/")
+        |upgrade your browser
+    |to improve your experience.
+--><div id="wrap"><div role="navigation" class="navbar navbar-ornament navbar-fixed-top"><div class="container"><div class="navbar-header"><a href="/" class="navbar-brand">marisks # code</a></div></div></div><div class="container"><div class="row"><div class="col-sm-8"><article><header><h1>EPiServer: writing Dojo widget</h1><p class="meta"><time datetime="2014-04-11T00:00:00.000Z">Fri Apr 11 2014</time></p></header><div class="lead"><p>I was working on open source library <a href="https://github.com/Geta/Tags">Geta Tags</a> and wanted to improve editor user experience. Starting from EPiServer 7, EPiServer uses <a href="http://dojotoolkit.org/">Dojo Toolkit</a> for administrative interface. Searching for tutorials and articles on how to create Dojo widgets for EPiServer didn&#39;t get expected results. So I had to get through all the Dojo creation and configuration process through trial and errors. In this article I will try to describe how to create simple and more advanced Dojo widgets for EPiServer.</p>
+
+</div><h1 id="problem">Problem</h1>
+<p>Dojo provides lot of <em>UI controls</em> which are used by EPiServer, but there are times when you need more advanced user experience. In my case I had to create user friendly tag selection. I found several articles (<a href="http://world.episerver.com/Blogs/Linus-Ekstrom/Dates/2012/10/Creating-a-Dojo-based-component/">here</a> and <a href="http://world.episerver.com/Blogs/Linus-Ekstrom/Dates/2013/12/Auto-suggest-editor-in-EPiServer-75/">here</a>) how to create and extend Dojo widgets - those did not explain much why and how those work, but was good starting point.</p>
+<p>For Geta Tags I started with simple widget which extended Dojo <a href="http://dojotoolkit.org/reference-guide/1.9/dojox/form/MultiComboBox.html">MultiComboBox</a>. While it work, it didn&#39;t provide user friendly interface. So I started to look for solutions. I searched for Dojo widgets which might be used and found nothing, but found a lot of jQuery/jQuery UI plugins for tag rendering. So the only task left was how to make jQuery plugin to work with Dojo in EPiServer.</p>
+<h1 id="-a-name-dojo_widgets-a-dojo-widgets"><a name="dojo_widgets"></a>Dojo widgets</h1>
+<p>There is a great book about Dojo - <a href="http://pragprog.com/book/rgdojo/mastering-dojo">Mastering Dojo: JavaScript and Ajax Tools for Great Web Experiences</a>. This book describes how to work, setup Dojo and also how to extend it.</p>
+<p>First thing to understand about widget is it&#39;s lifetime - in what order which methods are called. It will let you better understand why something works in particular way. Here is widget lifetime described in the book:</p>
+<ul>
+<li>widget constructor is called</li>
+<li>mixin parameters applied</li>
+<li>postMixinProperties() method called</li>
+<li>id assignment, if not provided</li>
+<li>buildRendering() method called</li>
+<li>copy attribute map</li>
+<li>postCreate() method called</li>
+<li>expand child widgets</li>
+<li>startup() method called</li>
+</ul>
+<p>There are several methods which you might want to use to extend the widget. Extensibility points are these methods:</p>
+<ul>
+<li><em>postMixinProperties</em> - it is called after the properties have been initialized. Override default properties or add custom properties in this method.</li>
+<li><em>buildRendering</em> - it gets the template and fills in the details. Usually you will not need to override this method. Default implementation is provided by <a href="https://dojotoolkit.org/reference-guide/1.9/dijit/_Templated.html#dijit-templated">dijit._Templated</a>. If you want to handle rendering yourself, then override this method.</li>
+<li><em>postCreate</em> - this is the main extensibility point. Widget has been rendered, but not it&#39;s child widgets and not <a href="https://dojotoolkit.org/documentation/tutorials/1.7/templated/#containerNode">containerNode</a>. You can set custom attributes, access <em>this.domNode</em> (reference to parent node of the widget itself) and manipulate with it in this method.</li>
+<li><em>startup</em> - this is called when widget and all child widgets have been created. This is the place where to access child widgets.</li>
+</ul>
+<p>For more information on widget lifetime see these articles:</p>
+<ul>
+<li><a href="http://dojotoolkit.org/documentation/tutorials/1.6/understanding_widget/">Understanding _Widget</a></li>
+<li><a href="http://chimera.labs.oreilly.com/books/1234000001819/ch12.html">Chapter 12. Dijit Anatomy and Lifecycle</a></li>
+<li><a href="https://dojotoolkit.org/reference-guide/1.9/dijit/_WidgetBase.html">_WidgetBase</a></li>
+</ul>
+<p>There are two ways how to build your widget - extend existing one or build new widget from scratch. I will explain how to extend existing widget, because it is the easier way to get something done. For creating new widget see article <a href="https://dojotoolkit.org/reference-guide/1.9/quickstart/writingWidgets.html">Writing Your Own Widget</a>.</p>
+<h1 id="minimal-implementation">Minimal implementation</h1>
+<p>To create new widget for EPiServer you will need:</p>
+<ul>
+<li>Dojo widget JavaScript implementation</li>
+<li>EPiServer editor descriptor class for your widget</li>
+<li>properly configured module.config</li>
+</ul>
+<h2 id="dojo-widget">Dojo widget</h2>
+<p>Let&#39;s start with simple Dojo widget. First version of <a href="https://github.com/Geta/Tags/blob/v0.9.8/ClientResources/Scripts/Editors/TagsSelection.js">Dojo widget for Geta Tags</a> extends Dojo <a href="http://dojotoolkit.org/reference-guide/1.9/dojox/form/MultiComboBox.html">MultiComboBox</a>. It allows to select multiple values from autosuggestion and adds them as comma separated string to the input.</p>
+<pre><code>define([
+    &quot;dojo/_base/declare&quot;,
+    &quot;dojo/store/JsonRest&quot;,
+    &quot;dojox/form/MultiComboBox&quot;
+],
+function (
+    declare,
+    JsonRest,
+    MultiComboBox) {
+
+    return declare([MultiComboBox], {
+        postMixInProperties: function () {
+            var store = new JsonRest({ target: &#39;/getatags&#39; });
+            this.set(&quot;store&quot;, store);
+            // call base implementation            
+            this.inherited(arguments);
+        },
+        _setValueAttr: function (value) {
+            value = value || &#39;&#39;;
+            if (this.delimiter &amp;&amp; value.length != 0) {
+                value = value + this.delimiter + &quot; &quot;;
+                arguments[0] = this._addPreviousMatches(value);
+            }
+            this.inherited(arguments);
+        }
+    });
+});
+</code></pre><p>Dojo uses AMD for structuring the application. First step is to call <em>define</em> function and define what are your dependencies. In this case I am defining <em>declare</em>, <em>JsonRest</em> and <em>MultiComboBox</em>. All three are included in Dojo package and available in EPiServer <sup><a href="#ref1">1</a></sup>. Dojo module dependencies are passed in as a first parameter of <em>define</em> function. Those are defined as an array of string paths to the modules.</p>
+<p>Second parameter of <em>define</em> function is function which defines the module. The function has arguments with dependencies defined previously. This function then should call <em>declare</em> function which declares your widget.</p>
+<p>As a first parameter it takes an array of objects which will be mixed in to your new widget. You can think about this as extending the object you pass in. In this case we will use <em>MultiComboBox</em>. The second argument is object which defines your widget. Here you can override methods and properties of your base widget.</p>
+<p>For Geta Tags I needed to set <em>store</em> property for <em>MultiComboBox</em>. The right method to override in this case is <em>postMixInProperties</em>. <em>store</em> property defines the source for autosuggestion. To use some server side API as a source you have to define <a href="http://dojotoolkit.org/reference-guide/1.9/dojo/store/JsonRest.html"><em>JsonRest</em></a> object by passing in options object which should contain property - <em>target</em> with URL to the resource. Then use <em>set</em> method of base widget to set the <em>store</em> property. The last step is to call <a href="http://dojotoolkit.org/reference-guide/1.9/dojo/_base/declare.html#calling-superclass-methods">base implementation</a> of <em>postMixiInProperties</em> by calling <a href="http://dojotoolkit.org/reference-guide/1.9/dojo/_base/declare.html#inherited"><em>inherited(arguments)</em></a> method that base widget can do it&#39;s stuff.</p>
+<p><em>MultiComboBox</em> has one issue that it do not handle the case when value provided to it is not defined. EPiServer usually do not provide initial value for the field so <em>MultiComboBox</em> can&#39;t handle it. To solve the issue I redefined <em>setValueAttr</em> function of <em>MultiComboBox</em> to set empty value if it is not defined. You can redefine your base widget methods if needed similar way, but be careful - those methods are <em>internal</em> and might change in future versions of Dojo.</p>
+<p>The last (or first) step is to place the JavaScript file in correct folder. All client scripts for EPiServer modules should be placed in <em>ClientResources</em> folder. I would suggest to create new folder with the name of your module and place JavaScript implementation there. For example, <em>ClientResources/Simple.Module/</em> folder. First versions of Geta Tags used <em>ClientResources/Scripts/Editors</em> folder, but it might collide with other modules. After placing JavaScript module in the correct place, you should configure it that it will be loaded by EPiServer. First step is to add correct path to your module in <em>module.config</em>.</p>
+<h2 id="-a-name-module_config-a-module-config"><a name="module_config"></a>module.config</h2>
+<p><em>module.config</em> is configuration file for modules used in your project and should be placed in the root of your project (for shell modules in the root folder of <a href="http://world.episerver.com/Documentation/Items/Developers-Guide/EPiServer-Framework/75/Modules/Modules/">shell module</a>). For more information see <a href="http://world.episerver.com/Documentation/Items/Developers-Guide/EPiServer-Framework/75/Configuration/Configuring-moduleconfig/">module.config documentation</a>.</p>
+<p>Basic configuration for Dojo module is simple - you have to register assembly of the project which defines <a href="#editor_descriptor">editor descriptor</a> and register path to your dojo module. First version of Geta Tags module.config looked like this:</p>
+<pre><code>&lt;?xml version=&quot;1.0&quot; encoding=&quot;utf-8&quot;?&gt;
+&lt;module&gt;
+  &lt;assemblies&gt;
+    &lt;add assembly=&quot;Geta.Tags&quot; /&gt;
+  &lt;/assemblies&gt;
+
+  &lt;dojoModules&gt;
+    &lt;add name=&quot;geta&quot; path=&quot;Scripts&quot; /&gt;
+  &lt;/dojoModules&gt;
+&lt;/module&gt;
+</code></pre><p>First of all I am defining Geta.Tags assembly and then dojo module - setting name of the module and path to the folder which contains dojo module scripts. The folder is relative to <em>ClientResources</em> folder. In this case folder path is - <em>ClientResources/Scripts/</em>.</p>
+<h2 id="-a-name-editor_descriptor-a-editor-descriptor"><a name="editor_descriptor"></a>Editor descriptor</h2>
+<p>Last step is creating editor descriptor. This class <em>connects</em> EPiServer content type property with your Dojo module.</p>
+<p>Here is the Geta Tags editor descriptor:</p>
+<pre><code>[EditorDescriptorRegistration(TargetType = typeof(string), UIHint = &quot;Tags&quot;)]
+public class TagsEditorSelectionEditorDescriptor : EditorDescriptor
+{
+    public TagsEditorSelectionEditorDescriptor()
+    {
+        ClientEditingClass = &quot;geta.editors.TagsSelection&quot;;
+    }
+}
+</code></pre><p>Create the class which derives from EditorDescriptor class. Decorate class with EditorDescriptorRegistration attribute and provide the type of the property and UIHint. UIHint is just the string name of the UIHint attribute which you will use later on the content type&#39;s property. EPiServer checks the property&#39;s UIHint and EditorDescriptor&#39;s UIHint and applies the editor descriptor to the property if they match.</p>
+<p>Then in the constructor of the class set <em>ClientEditingClass</em> which is in form of <em>{module name}.{path relative to module root}.{Dojo module file name}</em>. For Geta Tags this is <em>geta.editors.TagsSelection</em>:</p>
+<ul>
+<li><em>geta</em> is the module name we defined in <a href="#module_config"><em>module.config</em></a></li>
+<li><em>editors</em> is the folder relative to <em>Scripts</em> folder (it is defined as the root folder for module in <a href="#module_config"><em>module.config</em></a>)</li>
+<li><em>TagsSelection</em> is Dojo module file name without extension</li>
+</ul>
+<p>After defining editor descriptor you can use your custom property in content type:</p>
+<pre><code>[UIHint(&quot;Tags&quot;)]
+public virtual string Tags { get; set; }
+</code></pre><p>Just decorate your property with <em>UIHint</em> attribute with value you defined in editor descriptor. Now custom Dojo widget will be used when you start editing the field.</p>
+<h1 id="advanced-implementation">Advanced implementation</h1>
+<p>While you can create complex Dojo widgets yourself, most of the times it is better and faster to use existing libraries. Dojo do not have much custom plugins, but jQuery and jQuery UI <sup><a href="#ref2">2</a></sup> have and it would be great to use them in your Dojo widgets.</p>
+<h2 id="referencing-scripts-and-css-stylesheets">Referencing scripts and CSS stylesheets</h2>
+<p>In usual Web project referencing script libraries is simple - just add script tags in your markup and start using the plugins, but in EPiServer&#39;s Dojo implementation it is little bit different. You can&#39;t get to the markup and add scripts manually to EPiServer administration interface.</p>
+<p>There are two ways to use libraries - use CDN or use scripts from project. When you want to include the script in the project, you have to put them in your module folder which is defined in <em>module.config</em>, for example: <em>ClientResources/Geta.Tags</em> . Same applies for CSS. You can organize stylesheets and scripts in subfolders. For example, Geta Tags have <em>styles</em> folder for CSS and <em>vendor</em> folder for 3rd party libraries:</p>
+<p><img src="/img/2014-04-11-episerver-writing-dojo-widget/file_structure.jpg" alt="File structure"></p>
+<p>Next step is informing EPiServer to load these scripts and stylesheets when EPiServer administrative interface loads. This can be done in <em>module.config</em>:</p>
+<pre><code>&lt;module&gt;
+  &lt;assemblies&gt;
+    &lt;add assembly=&quot;Geta.Tags&quot; /&gt;
+  &lt;/assemblies&gt;
+
+  &lt;clientResources&gt;
+    &lt;add name=&quot;geta-tags-vendor&quot; resourceType=&quot;Script&quot; sortIndex=&quot;1&quot;
+        path=&quot;Geta.Tags/vendor/jquery-2.1.0.min.js&quot;  /&gt;
+    &lt;add name=&quot;geta-tags-vendor&quot; resourceType=&quot;Script&quot; sortIndex=&quot;2&quot;
+        path=&quot;Geta.Tags/vendor/jquery-ui.min.js&quot;  /&gt;
+    &lt;add name=&quot;geta-tags-vendor&quot; resourceType=&quot;Script&quot; sortIndex=&quot;3&quot;
+        path=&quot;Geta.Tags/vendor/tag-it.min.js&quot;  /&gt;
+    &lt;add name=&quot;geta-tags-styles&quot; resourceType=&quot;Style&quot; sortIndex=&quot;1&quot;
+        path=&quot;Geta.Tags/styles/jquery.tagit.css&quot;  /&gt;
+    &lt;add name=&quot;geta-tags-styles&quot; resourceType=&quot;Style&quot; sortIndex=&quot;2&quot;
+        path=&quot;Geta.Tags/styles/tagit.ui-zendesk.css&quot;  /&gt;
+  &lt;/clientResources&gt;
+
+  &lt;dojoModules&gt;
+    &lt;add name=&quot;geta-tags&quot; path=&quot;Geta.Tags&quot; /&gt;
+  &lt;/dojoModules&gt;
+
+  &lt;clientModule&gt;
+    &lt;moduleDependencies&gt;
+      &lt;add dependency=&quot;CMS&quot; type=&quot;RunAfter&quot; /&gt;
+    &lt;/moduleDependencies&gt;
+    &lt;requiredResources&gt;
+      &lt;add name=&quot;geta-tags-vendor&quot; /&gt;
+      &lt;add name=&quot;geta-tags-styles&quot; /&gt;
+    &lt;/requiredResources&gt;
+  &lt;/clientModule&gt;
+&lt;/module&gt;
+</code></pre><p>Define <em>clientResources</em> section and add all scripts and styles using <em>add</em> tag. For each resource define:</p>
+<ul>
+<li><em>name</em> - this is used to distinguish between different resources. You can use different name for each resource or use same name for group of resources. In the Geta Tags I used one name for scripts and other for styles.</li>
+<li><em>resourceType</em> - type of the resource - <em>Script</em> or <em>Style</em>.</li>
+<li><em>sortIndex</em> - the order in which resource will be rendered for resources with same name.</li>
+<li><em>path</em> - path to the resource. The path can be full URL or local path. Full URL is useful to define resources from CDN. Local path is used for resources in your project. It is relative to <em>ClientResources</em> folder.</li>
+</ul>
+<p>After that you have to define loading of these resources:</p>
+<ul>
+<li>define <em>moduleDependencies</em> section under <em>clientModule</em> section and add dependency on <em>CMS</em> with type <em>RunAfter</em>. <em>RunAfter</em> will inform EPiServer to render resources after EPiServer administration is loaded. If you skip this configuration, then your resources will not be loaded at all.</li>
+<li>define <em>requiredResources</em> section under <em>clientModule</em> section and add the names of your defined <em>clientResources</em>.</li>
+</ul>
+<p>This is all we need to get your scripts loaded.</p>
+<h2 id="using-jquery-plugin-in-dojo-widget">Using jQuery plugin in Dojo widget</h2>
+<p>When you have all libraries in place, it is easy to start using them. Each Dojo widget hase <em>domNode</em> which can be used to access widget&#39;s DOM node using jQuery. It means that jQuery plugin can be attached to this DOM node. In Geta Tags I am using <a href="https://github.com/aehlke/tag-it">tag-it</a> jQuery UI plugin to handle multiple tags:</p>
+<pre><code>define([
+    &quot;dojo/_base/declare&quot;,
+    &quot;dijit/form/TextBox&quot;
+],
+function (
+    declare,
+    TextBox) {
+
+    return declare([TextBox], {
+        postCreate: function() {
+            $(this.domNode).find(&#39;input&#39;).tagit({
+                autocomplete: { delay: 0, minLength: 2, source: &#39;/getatags&#39; }
+            });
+        }
+    });
+});
+</code></pre><p>First of all I am extending Dojo TextBox widget and overriding <em>postCreate</em> method with my implementation. <em>postCreate</em> in this case is the most appropriate place to put your functionality, because I can access <em>domNode</em> here. Dojo TextBox HTML has several wrappers around <em>input</em> so I have to find input and I am using jQuery for that. After that I am applying Tag-it plugin on the input field.</p>
+<p>The widget implementation becomes much simpler and it is much easier to achieve better user experience using custom plugins.</p>
+<h1 id="summary">Summary</h1>
+<p>Writing Dojo widget is not hard, but finding the way how to wire every piece together might take hours and hours. Also now I can see that two different frameworks - Dojo and jQuery can play together and make great user experience. I hope this article will help others and me too to implement new Dojo widgets and not fear of extending EPiServer administration user interface.</p>
+<div class="well">
+<a name="ref1"></a>1. You can find all available Dojo modules in EPiServer VPP/appData folder: <em>Modules\Shell\3.0.1209\ClientResources</em>.<br>
+<a name="ref2"></a>2. You are not limited to jQuery - use any JavaScript library you want.
+</div></article><div id="disqus_thread"></div><script>/* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+var disqus_shortname = 'marisksblog'; // required: replace example with your forum shortname
+
+/* * * DON'T EDIT BELOW THIS LINE * * */
+(function() {
+  var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+  dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+  (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();</script><noscript>Please enable JavaScript to view the<a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a><a href="http://disqus.com" class="dsq-brlink">comments powered by<span class="logo-disqus">Disqus</span></a></noscript></div><div class="col-sm-1"><aside class="archive"><ul class="nav"><li><a href="/">2021</a></li><li><a href="/2020/">2020</a></li><li><a href="/2019/">2019</a></li><li><a href="/2018/">2018</a></li><li><a href="/2017/">2017</a></li><li><a href="/2016/">2016</a></li><li><a href="/2015/">2015</a></li><li class="active"><a href="/2014/">2014</a></li><li><a href="/2013/">2013</a></li><li><a href="/2012/">2012</a></li></ul></aside></div><div class="col-sm-3"><aside class="panel panel-default"><div class="panel-body"><div class="about"><img src="/img/common/profile_0021.jpg" alt="profile picture" class="center-block img-responsive thumbnail"><p>Hi! I'm Māris Krivtežs. I am Web developer primarily working with ASP.NET, EPiServer and front-end development at&nbsp;<a href="http://geta.no" target="_blank">Geta</a>, but same time learning different programming languages, learning new programming paradigms, architectures, and design. I spend my free time with my family, reading books, bicycling and traveling.</p></div><ul class="social"><li><a href="http://stackoverflow.com/users/660154/marisks" target="_blank"><i class="fa fa-stack-overflow"></i></a></li><li><a href="https://github.com/marisks" target="_blank"><i class="fa fa-github-alt"></i></a></li><li><a href="https://twitter.com/pioners1001" target="_blank"><i class="fa fa-twitter"></i></a></li><li><a href="http://www.linkedin.com/pub/maris-krivtezs/31/98b/b53" target="_blank"><i class="fa fa-linkedin"></i></a></li><li><a href="/rss.xml" target="_blank"><i class="fa fa-rss"></i></a></li></ul><a href="https://getadigital.com" target="_blank"><img src="/img/common/ident-geta-wordmark.svg" alt="Geta logo" class="center-block img-responsive aside-logo"></a></div></aside></div></div></div></div><div id="footer"><div class="container"><div class="container credit">Copyright &copy; 2017 Maris Krivtezs. All Rights Reserved, except for the parts enumerated below:<ul class="licence-list"><li>- The source code examples on this blog are covered by&nbsp;<a href="https://opensource.org/licenses/mit-license.php">MIT License</a>.</li><li>- This page content, excluding the visual design and the logotype, is covered by&nbsp;<a href="http://creativecommons.org/licenses/by/4.0/">Creative Commons Attribution 4.0 International License</a>.</li></ul></div></div></div><script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><script>window.jQuery || document.write('<script src="/js/vendor/jquery-1.10.2.min.js"><\/script>')</script><script  src="/bower_components/bootstrap/dist/js/bootstrap.min.js"></script><script  src="/js/plugins.js"></script><script  src="/js/main.js"></script></body>

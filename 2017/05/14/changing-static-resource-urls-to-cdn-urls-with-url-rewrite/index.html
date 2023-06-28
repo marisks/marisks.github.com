@@ -1,0 +1,75 @@
+<!DOCTYPE html><!--if lt IE 8html.no-js.lt-ie9.lt-ie8(lang="en")--><!--if IE 8html.no-js.lt-ie9(lang="en")--><!--if gt IE 8html.no-js(lang="en")--><head><meta charset="utf-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><title>Changing static resource URLs to CDN URLs with URL Rewrite | marisks # code</title><meta name="description" content="Recently I was configuring a CDN in Azure for one of our projects. We needed to serve most of the static content (images and scripts) from the CDN to improve page load times. After the CDN had been set up, I had to change the content URLs to point to the CDN. There are several options to do it. You might handle it directly in the code, rewrite all URLs in some handler or as I did with URL rewrite."><meta name="keywords" content=".NET, ASP.NET, C#, JavaScript, Optimizely, EPiServer, programming languages"><meta name="viewport" content="width=device-width, initial-scale=1"><!--Place favicon.ico and apple-touch-icon.png in the root directory--><meta name="generator" content="DocPad v6.79.4" /><!-- Google Tag Manager--><script async src="https://www.googletagmanager.com/gtag/js?id=G-540M01NJGH"></script><script>window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-540M01NJGH');</script><!-- End Google Tag Manager--><link rel="icon" sizes="16x16 32x32" href="/favicon.ico?v=1"><link  rel="stylesheet" href="/css/vendor/normalize.css" /><link  rel="stylesheet" href="/css/vendor/main.css" /><link  rel="stylesheet" href="/css/vendor/bootstrap.min.css" /><link  rel="stylesheet" href="//netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css" /><link  rel="stylesheet" href="/css/style.css" /><script src="/js/vendor/modernizr-2.6.2.min.js"></script></head><body><!-- Google Tag Manager--><noscript><iframe src="//www.googletagmanager.com/ns.html?id=GTM-WDKMR7" height="0" width="0" style="display: none; visibility: hidden;"></iframe></noscript><!-- End Google Tag Manager--><!--if lt IE 8p.browsehappy
+    |You are using an
+    strong
+        |outdated browser
+    |. Please
+    a(href="http://browsehappy.com/")
+        |upgrade your browser
+    |to improve your experience.
+--><div id="wrap"><div role="navigation" class="navbar navbar-ornament navbar-fixed-top"><div class="container"><div class="navbar-header"><a href="/" class="navbar-brand">marisks # code</a></div></div></div><div class="container"><div class="row"><div class="col-sm-8"><article><header><h1>Changing static resource URLs to CDN URLs with URL Rewrite</h1><p class="meta"><time datetime="2017-05-14T00:00:00.000Z">Sun May 14 2017</time></p></header><div class="lead"><p>Recently I was configuring a CDN in Azure for one of our projects. We needed to serve most of the static content (images and scripts) from the CDN to improve page load times. After the CDN had been set up, I had to change the content URLs to point to the CDN. There are several options to do it. You might handle it directly in the code, rewrite all URLs in some handler or as I did with URL rewrite.</p>
+
+</div><p>There are several articles available about URL rewrite configuration which rewrites URLs in the response. But I couldn&#39;t find a good example how to rewrite relative URLs.</p>
+<p>You can configure URL rewrite in the <em>Web.config</em> file under the <em>rewrite</em> section. The primary structure consists of the inbound and outbound rules.</p>
+<pre><code class="lang-xml">&lt;rewrite&gt;
+    &lt;rules&gt;
+        &lt;!-- inbound rules --&gt;
+    &lt;/rules&gt;
+    &lt;outboundRules rewriteBeforeCache=&quot;true&quot;&gt;
+        &lt;!-- outbound rules --&gt;
+    &lt;/outboundRules&gt;
+&lt;/rewrite&gt;
+</code></pre>
+<p>When you want to modify an HTTP response, you should define the outbound rule for it. It consists of the two parts - what should it match and what action it should perform. In the <em>match</em> tag, you can provide a filter for which HTML tags it should be applied. You should also set the <em>pattern</em> attribute which can contain a regular expression.</p>
+<pre><code class="lang-xml">&lt;rule name=&quot;TheName&quot; stopProcessing=&quot;true&quot;&gt;
+  &lt;match filterByTags=&quot;A&quot; pattern=&quot;http://mysite.com/&quot; /&gt;
+  &lt;action type=&quot;Rewrite&quot; value=&quot;http://anothersite.com&quot; /&gt;
+&lt;/rule&gt;
+</code></pre>
+<p>When I was searching for the outbound rule to rewrite my relative URLs, I found an article <a href="https://www.saotn.org/create-cdn-using-iis-outbound-rules/">Create your own CDN using IIS Outbound Rules</a>. It has an example how to create rules for absolute URLs. It did not help me much as my site has only relative URLs for my static content. But this article was a good starting point. I found the regular expression to match different file extensions.</p>
+<pre><code>.*\.(jpg|jpeg|png).*
+</code></pre><p>Now I started creating my regular expression. After several tries, I understood that matching relative URLs is a quite hard problem. More searching and I got to the <a href="http://stackoverflow.com/a/31432012/660154">Stack Overflow answer</a> which helped me with relative URL matching.</p>
+<pre><code>(^(?!www\.|(?:http|ftp)s?:\/\/|[A-Za-z]:\\|\/\/)
+</code></pre><p>I could combine these two regular expressions and create the rules for my content. I also added a precondition to rewrite only HTML response.</p>
+<pre><code class="lang-xml">&lt;rule name=&quot;CDN-01-jpg&quot; preCondition=&quot;CheckHTML&quot; stopProcessing=&quot;true&quot;&gt;
+  &lt;match
+    filterByTags=&quot;Img&quot; 
+    pattern=&quot;(^(?!www\.|(?:http|ftp)s?:\/\/|[A-Za-z]:\\|\/\/).*\.(jpg|jpeg|png).*)&quot; /&gt;
+  &lt;action type=&quot;Rewrite&quot; value=&quot;https://mycdn.azureedge.net{R:1}&quot; /&gt;
+&lt;/rule&gt;
+&lt;rule name=&quot;CDN-01-js&quot; preCondition=&quot;CheckHTML&quot; stopProcessing=&quot;true&quot;&gt;
+  &lt;match
+    filterByTags=&quot;Script&quot;
+    pattern=&quot;(^(?!www\.|(?:http|ftp)s?:\/\/|[A-Za-z]:\\|\/\/).*\.(js).*)&quot; /&gt;
+  &lt;action type=&quot;Rewrite&quot; value=&quot;https://mycdn.azureedge.net{R:1}&quot; /&gt;
+&lt;/rule&gt;
+&lt;preConditions&gt;
+  &lt;preCondition name=&quot;CheckHTML&quot;&gt;
+    &lt;add input=&quot;{RESPONSE_CONTENT_TYPE}&quot; pattern=&quot;^text/html&quot; /&gt;
+  &lt;/preCondition&gt;
+&lt;/preConditions&gt;
+</code></pre>
+<p>I am using CDN only for images and JavaScript. I do not rewrite CSS content as it might contain references to the other resources such as fonts and images but it would break because of <a href="https://developer.mozilla.org/en-US/docs/Web/HTTP/Access_control_CORS">CORS</a>.</p>
+<p>While this solution is working fine, I had another issue. There are some images on the site which are loaded dynamically. Image tags have a separate attribute - &quot;data-src&quot; which points to the image source but doesn&#39;t load the image on the page load. Image loading is done later by the JavaScript. The outbound rule which I created was rewriting only the <em>img</em> tag&#39;s &quot;src&quot; attribute and ignored others.</p>
+<p>After some searching, I found a <a href="https://forums.iis.net/t/1215031.aspx">forum thread</a> on how to match and rewrite custom attributes. It helped me to create my own rule for it.</p>
+<pre><code class="lang-xml">&lt;rule name=&quot;CDN-01-custom-img&quot; preCondition=&quot;CheckHTML&quot; stopProcessing=&quot;true&quot;&gt;
+  &lt;match
+    filterByTags=&quot;None&quot;
+    pattern=&quot;&amp;lt;img ([^&gt;]*)data-src=&amp;quot;(.*?)&amp;quot;([^&gt;]*)&gt;&quot; /&gt;
+  &lt;action
+    type=&quot;Rewrite&quot;
+    value=&quot;&amp;lt;img {R:1}data-src=&amp;quot;https://mycdn.azureedge.net{R:2}&amp;quot;{R:3}&gt;&quot; /&gt;
+&lt;/rule&gt;
+</code></pre>
+<p>This rule matches the whole image and rewrites entire tag including all its attributes.</p>
+</article><div id="disqus_thread"></div><script>/* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+var disqus_shortname = 'marisksblog'; // required: replace example with your forum shortname
+
+/* * * DON'T EDIT BELOW THIS LINE * * */
+(function() {
+  var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+  dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+  (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();</script><noscript>Please enable JavaScript to view the<a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a><a href="http://disqus.com" class="dsq-brlink">comments powered by<span class="logo-disqus">Disqus</span></a></noscript></div><div class="col-sm-1"><aside class="archive"><ul class="nav"><li><a href="/">2021</a></li><li><a href="/2020/">2020</a></li><li><a href="/2019/">2019</a></li><li><a href="/2018/">2018</a></li><li class="active"><a href="/2017/">2017</a></li><li><a href="/2016/">2016</a></li><li><a href="/2015/">2015</a></li><li><a href="/2014/">2014</a></li><li><a href="/2013/">2013</a></li><li><a href="/2012/">2012</a></li></ul></aside></div><div class="col-sm-3"><aside class="panel panel-default"><div class="panel-body"><div class="about"><img src="/img/common/profile_0021.jpg" alt="profile picture" class="center-block img-responsive thumbnail"><p>Hi! I'm Māris Krivtežs. I am Web developer primarily working with ASP.NET, EPiServer and front-end development at&nbsp;<a href="http://geta.no" target="_blank">Geta</a>, but same time learning different programming languages, learning new programming paradigms, architectures, and design. I spend my free time with my family, reading books, bicycling and traveling.</p></div><ul class="social"><li><a href="http://stackoverflow.com/users/660154/marisks" target="_blank"><i class="fa fa-stack-overflow"></i></a></li><li><a href="https://github.com/marisks" target="_blank"><i class="fa fa-github-alt"></i></a></li><li><a href="https://twitter.com/pioners1001" target="_blank"><i class="fa fa-twitter"></i></a></li><li><a href="http://www.linkedin.com/pub/maris-krivtezs/31/98b/b53" target="_blank"><i class="fa fa-linkedin"></i></a></li><li><a href="/rss.xml" target="_blank"><i class="fa fa-rss"></i></a></li></ul><a href="https://getadigital.com" target="_blank"><img src="/img/common/ident-geta-wordmark.svg" alt="Geta logo" class="center-block img-responsive aside-logo"></a></div></aside></div></div></div></div><div id="footer"><div class="container"><div class="container credit">Copyright &copy; 2017 Maris Krivtezs. All Rights Reserved, except for the parts enumerated below:<ul class="licence-list"><li>- The source code examples on this blog are covered by&nbsp;<a href="https://opensource.org/licenses/mit-license.php">MIT License</a>.</li><li>- This page content, excluding the visual design and the logotype, is covered by&nbsp;<a href="http://creativecommons.org/licenses/by/4.0/">Creative Commons Attribution 4.0 International License</a>.</li></ul></div></div></div><script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><script>window.jQuery || document.write('<script src="/js/vendor/jquery-1.10.2.min.js"><\/script>')</script><script  src="/bower_components/bootstrap/dist/js/bootstrap.min.js"></script><script  src="/js/plugins.js"></script><script  src="/js/main.js"></script></body>

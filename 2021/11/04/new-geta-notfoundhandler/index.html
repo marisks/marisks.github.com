@@ -1,0 +1,84 @@
+<!DOCTYPE html><!--if lt IE 8html.no-js.lt-ie9.lt-ie8(lang="en")--><!--if IE 8html.no-js.lt-ie9(lang="en")--><!--if gt IE 8html.no-js(lang="en")--><head><meta charset="utf-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><title>New Geta.NotFoundHandler | marisks # code</title><meta name="description" content="BVN.404Handler and Geta.404Handler are re-released as Geta.NotFoundHandler. The new library supports ASP.NET 5 and Optimizely 12."><meta name="keywords" content=".NET, ASP.NET, C#, JavaScript, Optimizely, EPiServer, programming languages"><meta name="viewport" content="width=device-width, initial-scale=1"><!--Place favicon.ico and apple-touch-icon.png in the root directory--><meta name="generator" content="DocPad v6.79.4" /><!-- Google Tag Manager--><script async src="https://www.googletagmanager.com/gtag/js?id=G-540M01NJGH"></script><script>window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-540M01NJGH');</script><!-- End Google Tag Manager--><link rel="icon" sizes="16x16 32x32" href="/favicon.ico?v=1"><link  rel="stylesheet" href="/css/vendor/normalize.css" /><link  rel="stylesheet" href="/css/vendor/main.css" /><link  rel="stylesheet" href="/css/vendor/bootstrap.min.css" /><link  rel="stylesheet" href="//netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css" /><link  rel="stylesheet" href="/css/style.css" /><script src="/js/vendor/modernizr-2.6.2.min.js"></script></head><body><!-- Google Tag Manager--><noscript><iframe src="//www.googletagmanager.com/ns.html?id=GTM-WDKMR7" height="0" width="0" style="display: none; visibility: hidden;"></iframe></noscript><!-- End Google Tag Manager--><!--if lt IE 8p.browsehappy
+    |You are using an
+    strong
+        |outdated browser
+    |. Please
+    a(href="http://browsehappy.com/")
+        |upgrade your browser
+    |to improve your experience.
+--><div id="wrap"><div role="navigation" class="navbar navbar-ornament navbar-fixed-top"><div class="container"><div class="navbar-header"><a href="/" class="navbar-brand">marisks # code</a></div></div></div><div class="container"><div class="row"><div class="col-sm-8"><article><header><h1>New Geta.NotFoundHandler</h1><p class="meta"><time datetime="2021-11-04T00:00:00.000Z">Thu Nov 04 2021</time></p></header><div class="lead"><p>BVN.404Handler and Geta.404Handler are re-released as Geta.NotFoundHandler. The new library supports ASP.NET 5 and Optimizely 12.</p>
+
+</div><h1 id="the-new-name-geta-notfoundhandler">The new name - Geta.NotFoundHandler</h1>
+<p>We have changed the name of the package again. The reason for this is that the old name was inconsistent throughout the code. The assembly name was <code>Geta.404Handler</code>, but namespaces started with <code>Geta.NotFoundHandler</code>. We could have changed namespaces to have <code>404Handler</code> in the name, but namespaces&#39; parts in .NET can&#39;t start with a number.</p>
+<h1 id="asp-net-5-and-optimizely">ASP.NET 5 and Optimizely</h1>
+<p>After reviewing the library, we found that it was not so dependent on <em>Optimizely</em> (<em>Episerver</em>). So we refactored the library that supports ASP.NET 5 and added administrative UI integration in <em>Optimizely</em>. Now there are three separate packages:</p>
+<ul>
+<li><code>Geta.NotFoundHandler</code> - the core library for ASP.NET 5.</li>
+<li><code>Geta.NotFoundHandler.Admin</code> - the administrative UI.</li>
+<li><code>Geta.NotFoundHandler.Optimizely</code> - a module that integrates administrative UI in Optimizely UI.</li>
+</ul>
+<h1 id="getting-started-in-asp-net">Getting started in ASP.NET</h1>
+<p>In an ASP.NET 5 project install <code>Geta.NotFoundHandler.Admin</code> and in the <code>Startup.ConfigureServices</code> method configure the <em>NotFoundHandler</em>. You have to provide a connection string at least.</p>
+<pre><code>public void ConfigureServices(IServiceCollection services)
+{
+    var connectionString = ... // Retrieve connection string here
+    services.AddNotFoundHandler(o =&gt;
+    {
+        o.UseSqlServer(connectionstring);
+    });
+}
+</code></pre><p>By default, users in the <em>Administrators</em> role will have access to the administration UI. You can change the default policy in the configuration:</p>
+<pre><code>public void ConfigureServices(IServiceCollection services)
+{
+    var connectionString = ... // Retrieve connection string here
+    services.AddNotFoundHandler(o =&gt;
+    {
+        o.UseSqlServer(connectionstring);
+    }, policy =&gt;
+    {
+        policy.RequireRole(&quot;MyRole&quot;);
+    });
+}
+</code></pre><p>Next, initialize <em>NotFoundHandler</em> in the <code>Configure</code> method as the first registration. It will make sure that the handler will catch all 404 errors.</p>
+<pre><code>public void Configure(IApplicationBuilder app)
+{
+    app.UseNotFoundHandler();
+}
+</code></pre><p>Now you should be able to access administrative UI by <code>https://mysite/Geta.NotFoundHandler.Admin</code>.</p>
+<p><img src="/img/2021-11/redirects.png" class="img-responsive" alt=""></p>
+<h1 id="getting-started-in-optimizely">Getting started in Optimizely</h1>
+<p>In an Optimizely project install <code>Geta.NotFoundHandler.Optimizely</code> package. Then configure the handler in <code>Startup.ConfigureServices</code> method. Set the connection string and add access for the CMS administrators.</p>
+<pre><code>public void ConfigureServices(IServiceCollection services)
+{
+    var connectionString = ... // Retrieve connection string here
+    services.AddNotFoundHandler(o =&gt;
+    {
+        o.UseSqlServer(connectionString);
+    }, policy =&gt;
+    {
+        policy.RequireRole(Roles.CmsAdmins);
+    });
+    services.AddOptimizelyNotFoundHandler();
+}
+</code></pre><p>As in the ASP.NET case, initialize <em>NotFoundHandler</em> in the <code>Configure</code> method as the first registration.</p>
+<pre><code>public void Configure(IApplicationBuilder app)
+{
+    app.UseNotFoundHandler();
+}
+</code></pre><p>Run the application and in the <em>Optimizely</em> administrative UI you will find a link to the <em>NotFounHandler</em> administrative UI in the top menu.</p>
+<p><img src="/img/2021-11/optimizely-redirects.jpg" class="img-responsive" alt=""></p>
+<h1 id="summary">Summary</h1>
+<p><em>NotFoundHandler</em> now is ready for use in the new <em>Optimizely</em> 12, but if you are using older versions of <em>Optimizely/Episerver</em>, then we will still support those as <a href="https://github.com/Geta/404handler">Geta.404Handler</a>.</p>
+<p>The source code and documentation for the new <em>NotFoundHandler</em> is available on <a href="https://github.com/Geta/geta-notfoundhandler">GitHub</a>.</p>
+</article><div id="disqus_thread"></div><script>/* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+var disqus_shortname = 'marisksblog'; // required: replace example with your forum shortname
+
+/* * * DON'T EDIT BELOW THIS LINE * * */
+(function() {
+  var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+  dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+  (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();</script><noscript>Please enable JavaScript to view the<a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a><a href="http://disqus.com" class="dsq-brlink">comments powered by<span class="logo-disqus">Disqus</span></a></noscript></div><div class="col-sm-1"><aside class="archive"><ul class="nav"><li class="active"><a href="/">2021</a></li><li><a href="/2020/">2020</a></li><li><a href="/2019/">2019</a></li><li><a href="/2018/">2018</a></li><li><a href="/2017/">2017</a></li><li><a href="/2016/">2016</a></li><li><a href="/2015/">2015</a></li><li><a href="/2014/">2014</a></li><li><a href="/2013/">2013</a></li><li><a href="/2012/">2012</a></li></ul></aside></div><div class="col-sm-3"><aside class="panel panel-default"><div class="panel-body"><div class="about"><img src="/img/common/profile_0021.jpg" alt="profile picture" class="center-block img-responsive thumbnail"><p>Hi! I'm Māris Krivtežs. I am Web developer primarily working with ASP.NET, EPiServer and front-end development at&nbsp;<a href="http://geta.no" target="_blank">Geta</a>, but same time learning different programming languages, learning new programming paradigms, architectures, and design. I spend my free time with my family, reading books, bicycling and traveling.</p></div><ul class="social"><li><a href="http://stackoverflow.com/users/660154/marisks" target="_blank"><i class="fa fa-stack-overflow"></i></a></li><li><a href="https://github.com/marisks" target="_blank"><i class="fa fa-github-alt"></i></a></li><li><a href="https://twitter.com/pioners1001" target="_blank"><i class="fa fa-twitter"></i></a></li><li><a href="http://www.linkedin.com/pub/maris-krivtezs/31/98b/b53" target="_blank"><i class="fa fa-linkedin"></i></a></li><li><a href="/rss.xml" target="_blank"><i class="fa fa-rss"></i></a></li></ul><a href="https://getadigital.com" target="_blank"><img src="/img/common/ident-geta-wordmark.svg" alt="Geta logo" class="center-block img-responsive aside-logo"></a></div></aside></div></div></div></div><div id="footer"><div class="container"><div class="container credit">Copyright &copy; 2017 Maris Krivtezs. All Rights Reserved, except for the parts enumerated below:<ul class="licence-list"><li>- The source code examples on this blog are covered by&nbsp;<a href="https://opensource.org/licenses/mit-license.php">MIT License</a>.</li><li>- This page content, excluding the visual design and the logotype, is covered by&nbsp;<a href="http://creativecommons.org/licenses/by/4.0/">Creative Commons Attribution 4.0 International License</a>.</li></ul></div></div></div><script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><script>window.jQuery || document.write('<script src="/js/vendor/jquery-1.10.2.min.js"><\/script>')</script><script  src="/bower_components/bootstrap/dist/js/bootstrap.min.js"></script><script  src="/js/plugins.js"></script><script  src="/js/main.js"></script></body>

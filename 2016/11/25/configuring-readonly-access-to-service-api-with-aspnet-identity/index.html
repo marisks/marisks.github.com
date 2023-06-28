@@ -1,0 +1,152 @@
+<!DOCTYPE html><!--if lt IE 8html.no-js.lt-ie9.lt-ie8(lang="en")--><!--if IE 8html.no-js.lt-ie9(lang="en")--><!--if gt IE 8html.no-js(lang="en")--><head><meta charset="utf-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><title>Configuring read-only access to the Service API with ASP.NET Identity | marisks # code</title><meta name="description" content="Recently I had to configure read-only access to the Service API. ASP.NET Identity is used in this project and I was not able to make it work. The project was EPiServer 9 project. So I wanted to check if it is fixed in the EPiServer 10."><meta name="keywords" content=".NET, ASP.NET, C#, JavaScript, Optimizely, EPiServer, programming languages"><meta name="viewport" content="width=device-width, initial-scale=1"><!--Place favicon.ico and apple-touch-icon.png in the root directory--><meta name="generator" content="DocPad v6.79.4" /><!-- Google Tag Manager--><script async src="https://www.googletagmanager.com/gtag/js?id=G-540M01NJGH"></script><script>window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-540M01NJGH');</script><!-- End Google Tag Manager--><link rel="icon" sizes="16x16 32x32" href="/favicon.ico?v=1"><link  rel="stylesheet" href="/css/vendor/normalize.css" /><link  rel="stylesheet" href="/css/vendor/main.css" /><link  rel="stylesheet" href="/css/vendor/bootstrap.min.css" /><link  rel="stylesheet" href="//netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css" /><link  rel="stylesheet" href="/css/style.css" /><script src="/js/vendor/modernizr-2.6.2.min.js"></script></head><body><!-- Google Tag Manager--><noscript><iframe src="//www.googletagmanager.com/ns.html?id=GTM-WDKMR7" height="0" width="0" style="display: none; visibility: hidden;"></iframe></noscript><!-- End Google Tag Manager--><!--if lt IE 8p.browsehappy
+    |You are using an
+    strong
+        |outdated browser
+    |. Please
+    a(href="http://browsehappy.com/")
+        |upgrade your browser
+    |to improve your experience.
+--><div id="wrap"><div role="navigation" class="navbar navbar-ornament navbar-fixed-top"><div class="container"><div class="navbar-header"><a href="/" class="navbar-brand">marisks # code</a></div></div></div><div class="container"><div class="row"><div class="col-sm-8"><article><header><h1>Configuring read-only access to the Service API with ASP.NET Identity</h1><p class="meta"><time datetime="2016-11-25T00:00:00.000Z">Fri Nov 25 2016</time></p></header><div class="lead">Recently I had to configure read-only access to the Service API. ASP.NET Identity is used in this project and I was not able to make it work. The project was EPiServer 9 project. So I wanted to check if it is fixed in the EPiServer 10.</div><h1 id="configuring-read-only-service-api-access">Configuring read-only Service API access</h1>
+<p>First of all, <a href="http://marisks.net/2016/08/31/service-api-authentication-with-new-identity/">ASP.Identity should be configured for Service API</a>. The process for <em>EPiServer 10</em> is same as for <em>EPiServer 9</em>.</p>
+<h2 id="creating-read-only-user-group-and-user">Creating read-only user group and user</h2>
+<p>Creating user group and a user are simple. With <a href="http://world.episerver.com/documentation/Items/Developers-Guide/Episerver-CMS/9/Security/episerver-aspnetidentity/">AspNetIdentity</a> package default administrative user interface works. Navigate to the <em>Admin -&gt; Administer Groups</em> and add a new group.</p>
+<p><img src="/img/2016-11/create-read-only-service-api-group.png" class="img-responsive" alt="Read-only user group creation view"></p>
+<p>Next step is creating the user. Open <em>Admin -&gt; Create User</em> and fill in <em>Service API</em> user&#39;s information. Add the user to the newly created read-only group.</p>
+<p><img src="/img/2016-11/create-read-only-service-api-user.png" class="img-responsive" alt="Read-only user creation view"></p>
+<h2 id="adding-read-only-access-to-service-api">Adding read-only access to Service API</h2>
+<p>Access to the <em>Service API</em> can be configured under <em>Config -&gt; Permissions for Functions</em>. Here edit <em>ReadAccess</em> under <em>EPiServerServiceApi</em>.</p>
+<p><img src="/img/2016-11/read-access-to-service-api.png" class="img-responsive" alt="Permissions to functions view"></p>
+<p>By default, only <em>Administrators</em> are listed here. Add read-only user group here too.</p>
+<p><img src="/img/2016-11/read-access-to-service-api-read-only-group.png" class="img-responsive" alt="Permissions to functions group adding view"></p>
+<h2 id="testing">Testing</h2>
+<p>To test the setup, it is possible to create automated test which authenticates against site&#39;s <em>Service API</em>. For this purpose, I have created a base class to use for all <em>Service API</em> tests.</p>
+<pre><code>public abstract class ApiTestsBase : IDisposable
+{
+    private const string Username = &quot;RadOnlyService&quot;;
+    private const string Password = &quot;Episerver123%&quot;;
+
+    protected readonly HttpClient Client;
+    private const string IntegrationUrl =
+      &quot;https://readonly-serviceapi.localtest.me&quot;;
+
+    protected ApiTestsBase()
+    {
+        ServicePointManager.ServerCertificateValidationCallback +=
+            (sender, cert, chain, sslPolicyErrors) =&gt; true;
+        Client = new HttpClient
+        {
+            BaseAddress = new Uri(IntegrationUrl)
+        };
+        Authenticate(Client);
+    }
+
+    public void Dispose()
+    {
+        Client.Dispose();
+    }
+
+    private void Authenticate(HttpClient client)
+    {
+        var fields = new Dictionary&lt;string, string&gt;
+            {
+                { &quot;grant_type&quot;, &quot;password&quot; },
+                { &quot;username&quot;, Username },
+                { &quot;password&quot;, Password }
+            };
+        var response = client.PostAsync(
+            &quot;/episerverapi/token&quot;,
+            new FormUrlEncodedContent(fields)).Result;
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new Exception(
+              $&quot;Authentication failed! Status: {response.StatusCode}&quot;);
+        }
+
+        var content = response
+            .Content
+            .ReadAsStringAsync()
+            .Result;
+        var token = JObject
+            .Parse(content)
+            .GetValue(&quot;access_token&quot;)
+            .ToString();
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue(&quot;Bearer&quot;, token);
+    }
+}
+</code></pre><p>First of all, the base class makes sure that SSL certificate validation is ignored as you might have only a local certificate installed which does not validate. Then it makes authentication request against <em>Service API</em>.</p>
+<p>The actual authentication test is simple - just assert that no exception is thrown.</p>
+<pre><code>public class AuthenticationTests : ApiTestsBase
+{
+    [Fact]
+    public void it_authenticates()
+    {
+        Assert.True(true);
+    }
+}
+</code></pre><p>Next step is creating tests against <em>Service API</em> endpoints to get &quot;read-only&quot; data. With a base class in place, it is simple.</p>
+<pre><code>public class CatalogTests : ApiTestsBase
+{
+  [Fact]
+  public void it_can_retrieve_catalogs()
+  {
+      var response =
+          Client.GetAsync(&quot;/episerverapi/commerce/catalogs&quot;)
+              .Result;
+
+      Assert.True(response.IsSuccessStatusCode);
+      Assert.Equal(response.StatusCode, HttpStatusCode.OK);
+  }
+}
+</code></pre><p>This test ensures that our user can retrieve catalogs from <em>Service API</em>.</p>
+<p>Next test is a little bit more complicated. This test verifies that user is unable to modify anything. For this purpose, I am trying to create a new catalog. I took an example from <a href="http://world.episerver.com/documentation/developer-guides/Episerver-Service-API/catalog-restful-operations/">EPiServer documentation</a>. I took <em>Catalog</em> and <em>CatalogLanguage</em> classes from there.</p>
+<pre><code>[Fact]
+public void it_fails_to_post_catalog()
+{
+    var model = new Catalog
+    {
+        DefaultCurrency = &quot;usd&quot;,
+        DefaultLanguage = &quot;en&quot;,
+        EndDate = DateTime.UtcNow.AddYears(1),
+        IsActive = true,
+        IsPrimary = true,
+        Languages = new List&lt;CatalogLanguage&gt;
+        {
+            new CatalogLanguage
+            {
+                Catalog = &quot;Test Post&quot;,
+                LanguageCode = &quot;en&quot;,
+                UriSegment = &quot;Test Post&quot;
+            }
+        },
+        Name = &quot;Test Post&quot;,
+        StartDate = DateTime.UtcNow,
+        WeightBase = &quot;lbs&quot;
+    };
+    var json = JsonConvert.SerializeObject(model);
+    var response = Client.PostAsync(
+        &quot;/episerverapi/commerce/catalogs&quot;,
+        new StringContent(json, Encoding.UTF8, &quot;application/json&quot;)).Result;
+
+    Assert.False(response.IsSuccessStatusCode);
+    Assert.Equal(response.StatusCode, HttpStatusCode.Unauthorized);
+}
+</code></pre><h1 id="issues-with-episerver-9">Issues with EPiServer 9</h1>
+<p>While it is quite easy to setup <em>Service API</em> read-only access in <em>EPiServer 10</em>, I couldn&#39;t make it in <em>EPiServer 9</em>. I have stuck on granting access rights to my custom user group. At first, I tried to add read-only rights to the user group directly in the database.</p>
+<p><img src="/img/2016-11/epi9-read-access-to-service-api-db.png" class="img-responsive" alt="Adding read-only access rights in the database view"></p>
+<p>After that user still was not able to access <em>Service API</em>.</p>
+<p>Then I tried to setup through UI. But I couldn&#39;t find my user group there. Instead, it listed built-in groups and some <em>Windows</em> groups.</p>
+<p><img src="/img/2016-11/epi9-read-access-to-service-api-read-only-group.png" class="img-responsive" alt="Missing read-only group in the group search view"></p>
+<p>So if you are using <em>ASP.NET Identity</em> package and need a read-only access to <em>Service API</em>, you should upgrade to <em>EPiServer 10</em>.</p>
+</article><div id="disqus_thread"></div><script>/* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+var disqus_shortname = 'marisksblog'; // required: replace example with your forum shortname
+
+/* * * DON'T EDIT BELOW THIS LINE * * */
+(function() {
+  var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+  dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+  (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();</script><noscript>Please enable JavaScript to view the<a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a><a href="http://disqus.com" class="dsq-brlink">comments powered by<span class="logo-disqus">Disqus</span></a></noscript></div><div class="col-sm-1"><aside class="archive"><ul class="nav"><li><a href="/">2021</a></li><li><a href="/2020/">2020</a></li><li><a href="/2019/">2019</a></li><li><a href="/2018/">2018</a></li><li><a href="/2017/">2017</a></li><li class="active"><a href="/2016/">2016</a></li><li><a href="/2015/">2015</a></li><li><a href="/2014/">2014</a></li><li><a href="/2013/">2013</a></li><li><a href="/2012/">2012</a></li></ul></aside></div><div class="col-sm-3"><aside class="panel panel-default"><div class="panel-body"><div class="about"><img src="/img/common/profile_0021.jpg" alt="profile picture" class="center-block img-responsive thumbnail"><p>Hi! I'm Māris Krivtežs. I am Web developer primarily working with ASP.NET, EPiServer and front-end development at&nbsp;<a href="http://geta.no" target="_blank">Geta</a>, but same time learning different programming languages, learning new programming paradigms, architectures, and design. I spend my free time with my family, reading books, bicycling and traveling.</p></div><ul class="social"><li><a href="http://stackoverflow.com/users/660154/marisks" target="_blank"><i class="fa fa-stack-overflow"></i></a></li><li><a href="https://github.com/marisks" target="_blank"><i class="fa fa-github-alt"></i></a></li><li><a href="https://twitter.com/pioners1001" target="_blank"><i class="fa fa-twitter"></i></a></li><li><a href="http://www.linkedin.com/pub/maris-krivtezs/31/98b/b53" target="_blank"><i class="fa fa-linkedin"></i></a></li><li><a href="/rss.xml" target="_blank"><i class="fa fa-rss"></i></a></li></ul><a href="https://getadigital.com" target="_blank"><img src="/img/common/ident-geta-wordmark.svg" alt="Geta logo" class="center-block img-responsive aside-logo"></a></div></aside></div></div></div></div><div id="footer"><div class="container"><div class="container credit">Copyright &copy; 2017 Maris Krivtezs. All Rights Reserved, except for the parts enumerated below:<ul class="licence-list"><li>- The source code examples on this blog are covered by&nbsp;<a href="https://opensource.org/licenses/mit-license.php">MIT License</a>.</li><li>- This page content, excluding the visual design and the logotype, is covered by&nbsp;<a href="http://creativecommons.org/licenses/by/4.0/">Creative Commons Attribution 4.0 International License</a>.</li></ul></div></div></div><script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><script>window.jQuery || document.write('<script src="/js/vendor/jquery-1.10.2.min.js"><\/script>')</script><script  src="/bower_components/bootstrap/dist/js/bootstrap.min.js"></script><script  src="/js/plugins.js"></script><script  src="/js/main.js"></script></body>

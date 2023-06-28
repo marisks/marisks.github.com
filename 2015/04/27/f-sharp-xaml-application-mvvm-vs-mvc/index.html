@@ -1,0 +1,200 @@
+<!DOCTYPE html><!--if lt IE 8html.no-js.lt-ie9.lt-ie8(lang="en")--><!--if IE 8html.no-js.lt-ie9(lang="en")--><!--if gt IE 8html.no-js(lang="en")--><head><meta charset="utf-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><title>F# Xaml application - MVVM vs MVC | marisks # code</title><meta name="description" content="Most popular approach for creating Xaml applications is MVVM - Model View ViewModel. But there is an alternative - MVC (Model View Controller). So what are advantages of using one or another in your F# projects?"><meta name="keywords" content=".NET, ASP.NET, C#, JavaScript, Optimizely, EPiServer, programming languages"><meta name="viewport" content="width=device-width, initial-scale=1"><!--Place favicon.ico and apple-touch-icon.png in the root directory--><meta name="generator" content="DocPad v6.79.4" /><!-- Google Tag Manager--><script async src="https://www.googletagmanager.com/gtag/js?id=G-540M01NJGH"></script><script>window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-540M01NJGH');</script><!-- End Google Tag Manager--><link rel="icon" sizes="16x16 32x32" href="/favicon.ico?v=1"><link  rel="stylesheet" href="/css/vendor/normalize.css" /><link  rel="stylesheet" href="/css/vendor/main.css" /><link  rel="stylesheet" href="/css/vendor/bootstrap.min.css" /><link  rel="stylesheet" href="//netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css" /><link  rel="stylesheet" href="/css/style.css" /><script src="/js/vendor/modernizr-2.6.2.min.js"></script></head><body><!-- Google Tag Manager--><noscript><iframe src="//www.googletagmanager.com/ns.html?id=GTM-WDKMR7" height="0" width="0" style="display: none; visibility: hidden;"></iframe></noscript><!-- End Google Tag Manager--><!--if lt IE 8p.browsehappy
+    |You are using an
+    strong
+        |outdated browser
+    |. Please
+    a(href="http://browsehappy.com/")
+        |upgrade your browser
+    |to improve your experience.
+--><div id="wrap"><div role="navigation" class="navbar navbar-ornament navbar-fixed-top"><div class="container"><div class="navbar-header"><a href="/" class="navbar-brand">marisks # code</a></div></div></div><div class="container"><div class="row"><div class="col-sm-8"><article><header><h1>F# Xaml application - MVVM vs MVC</h1><p class="meta"><time datetime="2015-04-27T00:00:00.000Z">Mon Apr 27 2015</time></p></header><div class="lead">Most popular approach for creating Xaml applications is MVVM - Model View ViewModel. But there is an alternative - MVC (Model View Controller). So what are advantages of using one or another in your F# projects?</div><h1 id="introduction">Introduction</h1>
+<p>I am mainly Web developer and haven&#39;t created much desktop applications. I started some toy project and wanted to try creating desktop application in <em>WPF</em>. I wanted to follow best practices and started to look what approaches are used to build <em>Xaml</em> apps. Most common choice is <a href="http://en.wikipedia.org/wiki/Model_View_ViewModel">MVVM</a>, but recently I was reading the book <a href="http://www.manning.com/petricek2/">F# Deep Dives</a> where <a href="https://twitter.com/mitekm">Dmitry Morozov</a> described <a href="http://en.wikipedia.org/wiki/Model%E2%80%93view%E2%80%93controller">MVC</a>. Thanks to the <a href="https://github.com/fsprojects/FsXaml">FsXaml type provider</a> implementing both approaches now is really easy.</p>
+<p>Sample project described in this article is simple game score board. You can increase/decrease score for each team and reset score to zero when starting new game.</p>
+<p>Creating new <em>WPF</em> project in _F#__ is easy - just install <em>Visual Studio</em> extension - <a href="https://visualstudiogallery.msdn.microsoft.com/e0907c99-bb04-4eb8-9692-9333d5ff4399">F# Empty Windows App</a>. Then create new project using <em>F# Empty Windows App</em> template.</p>
+<p><img src="/img/2015-02/new-fsharp-wpf-project.png" alt="New Project dialog" class="img-responsive"></p>
+<p>After creating new project you will have basic <em>WPF</em> project structure.</p>
+<p><img src="/img/2015-02/wpf-project-structure.png" alt="Project structure" class="img-responsive"></p>
+<p>Project template also installs few <em>NuGet</em> packages which will help you to work with <em>Xaml</em> and <em>ViewModel</em> for <em>MVVM</em>.</p>
+<p><img src="/img/2015-02/wpf-nuget-dependences.png" alt="NuGet dependences" class="img-responsive"></p>
+<p>Now you can start building your application. First of all let&#39;s create <em>Xaml</em> view for our application. The view will be same for both <em>MVVM</em> and <em>MVC</em> application with minimal differences. It should display score for both teams, there should be the buttons to increase and decrease (to fix mistaken increase) score and there should be the button to start new game.</p>
+<p><img src="/img/2015-02/gasby_main_window.png" alt="Game score board main window" class="img-responsive"></p>
+<p>For application styling I am using <a href="http://mahapps.com/">mahapps.metro</a> UI toolkit for <em>WPF</em>.</p>
+<h1 id="mvvm">MVVM</h1>
+<p>First of all create model for score - record type to hold score for team A and team B.</p>
+<pre><code>type Score = {
+    ScoreA: int
+    ScoreB: int
+}
+</code></pre><p>Then define view model which will handle all UI logic. Inherit view model from <em>ViewModelBase</em> (you have to open <em>FSharp.ViewModule</em> for it).</p>
+<pre><code>type MainViewModel() as self =
+    inherit ViewModelBase()
+</code></pre><p>Next in <em>Xaml</em> view import local and model namespaces of <em>Window</em> control (I am using <em>MahApps</em> <em>MetroWindow</em> control). Namespace should contain also assembly name.</p>
+<pre><code>&lt;Controls:MetroWindow
+        xmlns=&quot;http://schemas.microsoft.com/winfx/2006/xaml/presentation&quot;
+        xmlns:x=&quot;http://schemas.microsoft.com/winfx/2006/xaml&quot;
+        xmlns:local=&quot;clr-namespace:ViewModels;assembly=gasby.Wpf&quot;
+        xmlns:model=&quot;clr-namespace:ViewModels;assembly=gasby.Wpf&quot;
+        xmlns:fsxaml=&quot;http://github.com/fsprojects/FsXaml&quot;
+        xmlns:Controls=&quot;clr-namespace:MahApps.Metro.Controls;assembly=MahApps.Metro&quot;
+        Title=&quot;gasby&quot; Height=&quot;750&quot; Width=&quot;1200&quot;&gt;
+</code></pre><p>Also add model to resource dictionary and set it as data context.</p>
+<pre><code>&lt;Controls:MetroWindow.Resources&gt;
+    &lt;ResourceDictionary&gt;
+        &lt;model:MainViewModel x:Key=&quot;model&quot; /&gt;
+    &lt;/ResourceDictionary&gt;
+&lt;/Controls:MetroWindow.Resources&gt;
+&lt;Controls:MetroWindow.DataContext&gt;
+    &lt;Binding Source=&quot;{StaticResource model}&quot; /&gt;
+&lt;/Controls:MetroWindow.DataContext&gt;
+</code></pre><p>Next in view model create mutable field to store current score value and initialize it with default value. Also create two backing fields and member properties which uses these backing fields. Backing fields are created using <em>FSharp.ViewModule</em> factory.</p>
+<pre><code>let defaultScore = { ScoreA = 0; ScoreB = 0}
+let mutable score = defaultScore
+
+let scoreA = self.Factory.Backing(&lt;@ self.ScoreA @&gt;, &quot;00&quot;)
+let scoreB = self.Factory.Backing(&lt;@ self.ScoreB @&gt;, &quot;00&quot;)
+
+// ...
+
+member self.ScoreA with get() = scoreA.Value
+                    and set value = scoreA.Value &lt;- value
+member self.ScoreB with get() = scoreB.Value
+                    and set value = scoreB.Value &lt;- value
+</code></pre><p>Bind those properties in <em>Xaml</em> view to labels. Those should be bound to label&#39;s <em>Content</em> attribute.</p>
+<pre><code>&lt;Label Content=&quot;{Binding ScoreA}&quot;&gt;&lt;/Label&gt;
+</code></pre><p>Now it&#39;s time for behavior. Create functions for score property update, increase/decrease of score for each team and creating new game. Score property update function - <em>updateScore</em>, just sets and formats property values from current score.</p>
+<pre><code>let updateScore() =
+    self.ScoreA &lt;- score.ScoreA.ToString(&quot;D2&quot;)
+    self.ScoreB &lt;- score.ScoreB.ToString(&quot;D2&quot;)
+</code></pre><p>Increase/decrease functions adds or substracts score for each team and sets new current score. <em>newGame</em> function just sets current score to default value.</p>
+<pre><code>let incA() = score &lt;- { score with ScoreA = score.ScoreA + 1 }
+let decA() = score &lt;- { score with ScoreA = score.ScoreA - 1 }
+let incB() = score &lt;- { score with ScoreB = score.ScoreB + 1 }
+let decB() = score &lt;- { score with ScoreB = score.ScoreB - 1 }
+let newGame() = score &lt;- defaultScore
+</code></pre><p>All these actions should be bound to buttons on <em>Xaml</em> view and also each action should update score labels. It would be possible to call <em>updateScore</em> function in each previously created functions after state gets mutated, but there is also more functional way. State mutation functions returns <em>unit</em> and <em>updateScore</em> function has <em>unit</em> as input parameter, so those can be composed like:</p>
+<pre><code>let newIncA = incA &gt;&gt; updateScore
+</code></pre><p>Then I created helper function to compose all defined functions with <em>updateScore</em> function and pattern match on resulting tuple to extract new composed functions.</p>
+<pre><code>let buildCommands (incA, decA, incB, decB, newGame) =
+    let commands = [incA; decA; incB; decB; newGame]
+                    |&gt; List.map (fun f -&gt; f &gt;&gt; updateScore)
+    match commands with
+    | [A; B; C; D; E] -&gt; A, B, C, D, E
+    | _ -&gt; failwith &quot;Error&quot;
+
+let (incACommand, decACommand, incBCommand, decBCommand, newGameCommand) =
+    buildCommands(incA, decA, incB, decB, newGame)
+</code></pre><p>Probably manually composing each new function would be easier, but this was good excercise to do :).</p>
+<p>Now create view model methods for each command using <em>FSharp.ViewModule</em> factory. I am creating sync version of commands, but it is possible to use also async version, only then backing functions should also be async.</p>
+<pre><code>member self.IncA = self.Factory.CommandSync(incACommand)
+member self.DecA = self.Factory.CommandSync(decACommand)
+member self.IncB = self.Factory.CommandSync(incBCommand)
+member self.DecB = self.Factory.CommandSync(decBCommand)
+member self.NewGame = self.Factory.CommandSync(newGameCommand)
+</code></pre><p>Bind these commands to <em>Xaml</em> view like in code below. Commands are bound to <em>Command</em> attribute.</p>
+<pre><code>&lt;Button Command=&quot;{Binding NewGame}&quot;&gt;&lt;/Button&gt;
+</code></pre><h2 id="pros">Pros</h2>
+<p><em>MVVM</em> pattern looks quite simple in this application. It is also popular in <em>WPF</em> community. It is command driven and supports two way binding.</p>
+<h2 id="cons">Cons</h2>
+<p>UI logic and view model is coupled in one view model class. It is not event-driven by default.</p>
+<h1 id="mvc">MVC</h1>
+<p>Start <em>MVC</em> project with same view as <em>MVVM</em>, but without any binding attributes for controls. Instead add name for each control wich has to be updated or which will trigger some event. For example, label code below.</p>
+<pre><code>&lt;Label x:Name=&quot;ScoreALabel&quot;&gt;&lt;/Label&gt;
+</code></pre><p>Next in <em>MainWindow.xaml.fs</em> create model, view and controller. All should inherit from <em>FSharp.Desktop.UI</em> base classes.</p>
+<p>Model should be abstract class, so should add <em>AbstractClass</em> attribute and all it&#39;s properties should be abstract too. Score board&#39;s model will keep two values for score of teams A and B.</p>
+<pre><code>[&lt;AbstractClass&gt;]
+type ScoreModel() =
+    inherit Model()
+
+    abstract ScoreA: int with get, set
+    abstract ScoreB: int with get, set
+</code></pre><p>Now it&#39;s time to define view and it&#39;s events. Events are just discriminated union of all possible events we would want to handle. For game score board those are increasing/decreasing score for each team and creating new game.</p>
+<pre><code>type ScoringEvents = IncA | DecA | IncB | DecB | New
+</code></pre><p>The view wires model, events and <em>Xaml</em> window together.</p>
+<pre><code>type MainView(root : MainWindow) as x =
+    inherit View&lt;ScoringEvents, ScoreModel, MetroWindow&gt;(root.Root)
+</code></pre><p>Then map control events to our model events - <em>ScoringEvents</em> by overriding <em>EventStreams</em> property. It should return event stream (<em>IObservable</em>) of our <em>ScoringEvents</em>.</p>
+<pre><code>override x.EventStreams =
+    [
+        let buttonClicks =
+            [
+                root.IncAButton, IncA
+                root.DecAButton, DecA
+                root.IncBButton, IncB
+                root.DecBButton, DecB
+                root.NewGameButton, New
+            ]
+            |&gt; List.map (fun (btn, evt) -&gt; btn.Click
+                                        |&gt; Observable.mapTo evt)
+        yield! buttonClicks
+    ]
+</code></pre><p>In this example I have only buttons and only <em>Click</em> event for each. So the easiest way is to create list of button/model event tuples and then map each click event of the button to matching model event. Then use <em>yield!</em> to return stream of events.</p>
+<p>Next bind model to label controls by overriding <em>SetBindings</em> method. <em>SetBindings</em> method has model as a parameter. Binding is defined using <em>Binding</em> class method <em>OfExpression</em> and providing it expression with binding between controls&#39; properties and model properties.</p>
+<pre><code>override x.SetBindings model =
+    let root = MainWindow(x.Root)
+    let scoreFormat (s:int) = s.ToString(&quot;D2&quot;) :&gt; obj
+    Binding.OfExpression
+        &lt;@
+            root.ScoreALabel.Content &lt;- scoreFormat model.ScoreA
+            root.ScoreBLabel.Content &lt;- scoreFormat model.ScoreB
+        @&gt;
+</code></pre><p>Here I used helper function - <em>scoreFormat</em> to format model values as numbers with two digits. As label&#39;s attribute <em>Content</em> is of type <em>obj</em>, then I had to cast result of formatted string to <em>obj</em> too.</p>
+<p>Now define controller. It should implement interface - <em>IController</em> by providing model and model&#39;s events. There are two methods to implement - <em>InitModel</em> where we set initial model values and <em>Dispatcher</em> witch maps events with event handlers. In this example event handlers are just methods of controller class. To map events with these methods <em>Sync</em> function is used.</p>
+<pre><code>type MainController() =
+
+    interface IController&lt;ScoringEvents, ScoreModel&gt; with
+
+        member x.InitModel model =
+            model.ScoreA &lt;- 0
+            model.ScoreB &lt;- 0
+
+        member x.Dispatcher = function
+            | IncA -&gt; Sync x.IncA
+            | DecA -&gt; Sync x.DecA
+            | IncB -&gt; Sync x.IncB
+            | DecB -&gt; Sync x.DecB
+            | New -&gt; Sync x.NewGame
+
+    member x.IncA(model : ScoreModel) =
+        model.ScoreA &lt;- model.ScoreA + 1
+    member x.IncB(model : ScoreModel) =
+        model.ScoreB &lt;- model.ScoreB + 1
+    member x.DecA(model : ScoreModel) =
+        model.ScoreA &lt;- model.ScoreA - 1
+    member x.DecB(model : ScoreModel) =
+        model.ScoreB &lt;- model.ScoreB - 1
+    member x.NewGame(model : ScoreModel) =
+        model.ScoreA &lt;- 0
+        model.ScoreB &lt;- 0
+</code></pre><p>All methods just mutates state of each score field on the model.</p>
+<p>The last step is to wire model, view and controller together and it is done in <em>App.fs</em>. I have to instantiate model, view (by providing instance of the window) and controller and then instantiate <em>MVC</em> class and start the application.</p>
+<pre><code>[&lt;STAThread&gt;]
+[&lt;EntryPoint&gt;]
+let main argv =
+    let app = App().Root
+
+    let model = ScoreModel.Create()
+    let view = MainView(MainWindow())
+    let controller = MainController()
+    let mvc = Mvc(model, view, controller)
+    use __ = mvc.Start()
+
+    app.Run(view.Root)
+</code></pre><h2 id="pros">Pros</h2>
+<p>I like that <em>MVC</em> version uses event streams and that it separates data binding from UI logic.</p>
+<h2 id="cons">Cons</h2>
+<p>While it provides event streams there is no way to manipulate the event stream based on current view model values (at least I couldn&#39;t find a way). I also do not like mutable model, but as I understand we have to live with it also in <em>MVVM</em> version. It also has lot more gluing code to write than <em>MVVM</em> version.</p>
+<h1 id="summary">Summary</h1>
+<p>Both approaches seems to have diffrenet usages. <em>MVC</em> style application is more event driven, so it would fit more for applications which produces lot of events. On the other side <em>MVVM</em> style application is more data driven and would fit more for applications with lot of data forms and simple commands.</p>
+<p>But I feel that non of these <em>Xaml</em> application styles benefit much from functional programming. I imagine that ideal application should consist of the view which produces events and event holds current view state. All application logic should be handled by filtering and manipulating events and view model, and in the output it should produce new view model which is bound back to the view. For now I haven&#39;t discovered such solution.</p>
+<p>The source code for both versions can be found on <a href="https://github.com/marisks/mvvm_mvc">GitHub</a>.</p>
+</article><div id="disqus_thread"></div><script>/* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+var disqus_shortname = 'marisksblog'; // required: replace example with your forum shortname
+
+/* * * DON'T EDIT BELOW THIS LINE * * */
+(function() {
+  var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+  dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+  (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();</script><noscript>Please enable JavaScript to view the<a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a><a href="http://disqus.com" class="dsq-brlink">comments powered by<span class="logo-disqus">Disqus</span></a></noscript></div><div class="col-sm-1"><aside class="archive"><ul class="nav"><li><a href="/">2021</a></li><li><a href="/2020/">2020</a></li><li><a href="/2019/">2019</a></li><li><a href="/2018/">2018</a></li><li><a href="/2017/">2017</a></li><li><a href="/2016/">2016</a></li><li class="active"><a href="/2015/">2015</a></li><li><a href="/2014/">2014</a></li><li><a href="/2013/">2013</a></li><li><a href="/2012/">2012</a></li></ul></aside></div><div class="col-sm-3"><aside class="panel panel-default"><div class="panel-body"><div class="about"><img src="/img/common/profile_0021.jpg" alt="profile picture" class="center-block img-responsive thumbnail"><p>Hi! I'm Māris Krivtežs. I am Web developer primarily working with ASP.NET, EPiServer and front-end development at&nbsp;<a href="http://geta.no" target="_blank">Geta</a>, but same time learning different programming languages, learning new programming paradigms, architectures, and design. I spend my free time with my family, reading books, bicycling and traveling.</p></div><ul class="social"><li><a href="http://stackoverflow.com/users/660154/marisks" target="_blank"><i class="fa fa-stack-overflow"></i></a></li><li><a href="https://github.com/marisks" target="_blank"><i class="fa fa-github-alt"></i></a></li><li><a href="https://twitter.com/pioners1001" target="_blank"><i class="fa fa-twitter"></i></a></li><li><a href="http://www.linkedin.com/pub/maris-krivtezs/31/98b/b53" target="_blank"><i class="fa fa-linkedin"></i></a></li><li><a href="/rss.xml" target="_blank"><i class="fa fa-rss"></i></a></li></ul><a href="https://getadigital.com" target="_blank"><img src="/img/common/ident-geta-wordmark.svg" alt="Geta logo" class="center-block img-responsive aside-logo"></a></div></aside></div></div></div></div><div id="footer"><div class="container"><div class="container credit">Copyright &copy; 2017 Maris Krivtezs. All Rights Reserved, except for the parts enumerated below:<ul class="licence-list"><li>- The source code examples on this blog are covered by&nbsp;<a href="https://opensource.org/licenses/mit-license.php">MIT License</a>.</li><li>- This page content, excluding the visual design and the logotype, is covered by&nbsp;<a href="http://creativecommons.org/licenses/by/4.0/">Creative Commons Attribution 4.0 International License</a>.</li></ul></div></div></div><script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><script>window.jQuery || document.write('<script src="/js/vendor/jquery-1.10.2.min.js"><\/script>')</script><script  src="/bower_components/bootstrap/dist/js/bootstrap.min.js"></script><script  src="/js/plugins.js"></script><script  src="/js/main.js"></script></body>

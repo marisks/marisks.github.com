@@ -1,0 +1,115 @@
+<!DOCTYPE html><!--if lt IE 8html.no-js.lt-ie9.lt-ie8(lang="en")--><!--if IE 8html.no-js.lt-ie9(lang="en")--><!--if gt IE 8html.no-js(lang="en")--><head><meta charset="utf-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><title>Configuring your Episerver libraries .NET Core way | marisks # code</title><meta name="description" content="Quite often when you develop a library, you need to run some initialization code or allow a library user to configure your it. Usually, developers add initializable modules in their libraries and use settings from Web.config to configure their libraries. However, these approaches have some drawbacks."><meta name="keywords" content=".NET, ASP.NET, C#, JavaScript, Optimizely, EPiServer, programming languages"><meta name="viewport" content="width=device-width, initial-scale=1"><!--Place favicon.ico and apple-touch-icon.png in the root directory--><meta name="generator" content="DocPad v6.79.4" /><!-- Google Tag Manager--><script async src="https://www.googletagmanager.com/gtag/js?id=G-540M01NJGH"></script><script>window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-540M01NJGH');</script><!-- End Google Tag Manager--><link rel="icon" sizes="16x16 32x32" href="/favicon.ico?v=1"><link  rel="stylesheet" href="/css/vendor/normalize.css" /><link  rel="stylesheet" href="/css/vendor/main.css" /><link  rel="stylesheet" href="/css/vendor/bootstrap.min.css" /><link  rel="stylesheet" href="//netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css" /><link  rel="stylesheet" href="/css/style.css" /><script src="/js/vendor/modernizr-2.6.2.min.js"></script></head><body><!-- Google Tag Manager--><noscript><iframe src="//www.googletagmanager.com/ns.html?id=GTM-WDKMR7" height="0" width="0" style="display: none; visibility: hidden;"></iframe></noscript><!-- End Google Tag Manager--><!--if lt IE 8p.browsehappy
+    |You are using an
+    strong
+        |outdated browser
+    |. Please
+    a(href="http://browsehappy.com/")
+        |upgrade your browser
+    |to improve your experience.
+--><div id="wrap"><div role="navigation" class="navbar navbar-ornament navbar-fixed-top"><div class="container"><div class="navbar-header"><a href="/" class="navbar-brand">marisks # code</a></div></div></div><div class="container"><div class="row"><div class="col-sm-8"><article><header><h1>Configuring your Episerver libraries .NET Core way</h1><p class="meta"><time datetime="2018-08-28T00:00:00.000Z">Tue Aug 28 2018</time></p></header><div class="lead"><p>Quite often when you develop a library, you need to run some initialization code or allow a library user to configure your it. Usually, developers add initializable modules in their libraries and use settings from Web.config to configure their libraries. However, these approaches have some drawbacks.</p>
+
+</div><h1 id="drawbacks-of-initializable-modules-and-configuration-settings">Drawbacks of initializable modules and configuration settings</h1>
+<p>The main drawback of initializable modules in libraries is that a library user cannot control when an initializable module is called. The user might want to disable initialization code too.</p>
+<p>Another drawback is the startup time. Episerver scans for initializable modules, and it will take slightly more time to find and run those. If each small library would have an initializable module, then a more significant project which uses several libraries might be slow at startup.</p>
+<p>Putting configuration settings in the Web.config forces to use only one way of configuration. If a developer wants to retrieve a configuration from another source (for example, database), then there is no way to do it. Also, in the future when we will get to .NET Core in Episerver, the library which forces usage of Web.config will not work anymore.</p>
+<h1 id="the-new-way">The new way</h1>
+<p>First of all, the configuration should be done in the code. This allows a developer to choose the source of configuration. In the simplest form, it is hardcoded in the code.</p>
+<p><em>ASP.NET Core</em> has an excellent example of how to achieve it. It uses <a href="https://docs.microsoft.com/en-us/aspnet/core/fundamentals/startup?view=aspnetcore-2.1#the-configureservices-method">ConfigureServices</a> method for IoC configuration and <a href="https://docs.microsoft.com/en-us/aspnet/core/fundamentals/startup?view=aspnetcore-2.1#the-configure-method">Configure</a> method for request handling (and other) configuration.</p>
+<p>In <em>Episerver</em>, we have two similar extension points - <a href="https://world.episerver.com/documentation/developer-guides/CMS/initialization/dependency-injection/">IConfigurableModule</a> for IoC configuration and <a href="https://world.episerver.com/documentation/developer-guides/CMS/initialization/">IInitializableModule</a> for other initialization code. Previously, we used to create own <em>IConfigurableModule</em> and <em>IInitializableModule</em> in our libraries, but instead, we should allow our library users to call library configuration code in their modules.</p>
+<p>The usage of an imaginable library&#39;s - <em>MyLibrary</em> configuration might look like this:</p>
+<pre><code class="lang-csharp">[InitializableModule]
+public class IoCModule : IConfigurableModule
+{
+  public void ConfigureContainer(ServiceConfigurationContext context)
+  {
+    context.AddMyLibrary();
+  }
+  public void Initialize(InitializationEngine context)
+  {
+  }
+  public void Uninitialize(InitializationEngine context)
+  {
+  }
+}
+
+[InitializableModule]
+[ModuleDependency(
+  typeof(EPiServer.Web.InitializationModule),
+  typeof(EPiServer.Commerce.Initialization.InitializationModule))]
+public class AppInitialization : IInitializableModule
+{
+  public void Initialize(InitializationEngine context)
+  {
+    context.UseMyLibrary(settings =&gt; {
+      settings.MyProperty = 20;
+      return settings;
+    });
+  }
+
+  public void Uninitialize(InitializationEngine context)
+  {
+  }
+}
+</code></pre>
+<p>Here I am using the same naming as in <em>ASP.NET Core</em> - <em>IoC</em> configuration extension methods start with <em>Add</em> and configuration methods in an initializable module start with <em>Use</em>. In the initializable module, you will have an option to configure the library by passing an action with settings configuration as a parameter.</p>
+<p>An extension for IoC configuration is simple. It just registers your classes in an IoC container.</p>
+<pre><code class="lang-csharp">public static class IoCExtensions
+{
+  public static void AddMyLibrary(this ServiceConfigurationContext context)
+  {
+    context.Services.AddTransient&lt;IService, Service&gt;();
+  }
+}
+</code></pre>
+<p>An extension with configuration is a little bit more complicated. First of all, you will need a settings class. You can add default settings in the constructor.</p>
+<pre><code class="lang-csharp">public class MySettings
+{
+  public MySettings()
+  {
+    MyProperty = 10;
+  }
+  public int MyProperty { get; set; }
+}
+</code></pre>
+<p>Next, you need a class as an entry point for your library initialization. This class is responsible for passing settings to an appropriate destination. It could be some context class, storing in a database, passing settings to the service classes, etc.</p>
+<pre><code class="lang-csharp">public class MyLibraryInitializer
+{
+  IService _service;
+
+  public MyLibraryInitializer(IService service, IService2 service2 ...)
+  {
+    _service = service;
+  }
+
+  public void Initialize(MySettings settings)
+  {
+    _service.AddMyProperty(settings.MyProperty);
+  }
+}
+</code></pre>
+<p>Now you can create an extension. This extension is just responsible for passing configured settings to the initializer.</p>
+<pre><code class="lang-csharp">public static class InitializationExtensions
+{
+  public static void UseMyLibrary(this this InitializationEngine context, Func&lt;MySettings, MySettings&gt; configure)
+  {
+    var settings = new MySettings();
+    settings = configure(settings);
+
+    var initializer = context.Locate.Advanced.GetInstance&lt;MyLibraryInitializer&gt;();
+    initializer.Initialize(settings);
+  }
+}
+</code></pre>
+<p>Now with this approach developers are free to choose how and when to call the initialization code of your library.</p>
+</article><div id="disqus_thread"></div><script>/* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+var disqus_shortname = 'marisksblog'; // required: replace example with your forum shortname
+
+/* * * DON'T EDIT BELOW THIS LINE * * */
+(function() {
+  var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+  dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+  (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();</script><noscript>Please enable JavaScript to view the<a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a><a href="http://disqus.com" class="dsq-brlink">comments powered by<span class="logo-disqus">Disqus</span></a></noscript></div><div class="col-sm-1"><aside class="archive"><ul class="nav"><li><a href="/">2021</a></li><li><a href="/2020/">2020</a></li><li><a href="/2019/">2019</a></li><li class="active"><a href="/2018/">2018</a></li><li><a href="/2017/">2017</a></li><li><a href="/2016/">2016</a></li><li><a href="/2015/">2015</a></li><li><a href="/2014/">2014</a></li><li><a href="/2013/">2013</a></li><li><a href="/2012/">2012</a></li></ul></aside></div><div class="col-sm-3"><aside class="panel panel-default"><div class="panel-body"><div class="about"><img src="/img/common/profile_0021.jpg" alt="profile picture" class="center-block img-responsive thumbnail"><p>Hi! I'm Māris Krivtežs. I am Web developer primarily working with ASP.NET, EPiServer and front-end development at&nbsp;<a href="http://geta.no" target="_blank">Geta</a>, but same time learning different programming languages, learning new programming paradigms, architectures, and design. I spend my free time with my family, reading books, bicycling and traveling.</p></div><ul class="social"><li><a href="http://stackoverflow.com/users/660154/marisks" target="_blank"><i class="fa fa-stack-overflow"></i></a></li><li><a href="https://github.com/marisks" target="_blank"><i class="fa fa-github-alt"></i></a></li><li><a href="https://twitter.com/pioners1001" target="_blank"><i class="fa fa-twitter"></i></a></li><li><a href="http://www.linkedin.com/pub/maris-krivtezs/31/98b/b53" target="_blank"><i class="fa fa-linkedin"></i></a></li><li><a href="/rss.xml" target="_blank"><i class="fa fa-rss"></i></a></li></ul><a href="https://getadigital.com" target="_blank"><img src="/img/common/ident-geta-wordmark.svg" alt="Geta logo" class="center-block img-responsive aside-logo"></a></div></aside></div></div></div></div><div id="footer"><div class="container"><div class="container credit">Copyright &copy; 2017 Maris Krivtezs. All Rights Reserved, except for the parts enumerated below:<ul class="licence-list"><li>- The source code examples on this blog are covered by&nbsp;<a href="https://opensource.org/licenses/mit-license.php">MIT License</a>.</li><li>- This page content, excluding the visual design and the logotype, is covered by&nbsp;<a href="http://creativecommons.org/licenses/by/4.0/">Creative Commons Attribution 4.0 International License</a>.</li></ul></div></div></div><script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><script>window.jQuery || document.write('<script src="/js/vendor/jquery-1.10.2.min.js"><\/script>')</script><script  src="/bower_components/bootstrap/dist/js/bootstrap.min.js"></script><script  src="/js/plugins.js"></script><script  src="/js/main.js"></script></body>

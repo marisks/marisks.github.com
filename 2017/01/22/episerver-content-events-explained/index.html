@@ -1,0 +1,510 @@
+<!DOCTYPE html><!--if lt IE 8html.no-js.lt-ie9.lt-ie8(lang="en")--><!--if IE 8html.no-js.lt-ie9(lang="en")--><!--if gt IE 8html.no-js(lang="en")--><head><meta charset="utf-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><title>Episerver Content Events Explained | marisks # code</title><meta name="description" content="There are times when you need to be notified about some actions happening in the Episerver and execute the code when it happens. Episerver has built-in events which help to achieve it. In this article, I will describe content events which are implemented through IContentEvents interface."><meta name="keywords" content=".NET, ASP.NET, C#, JavaScript, Optimizely, EPiServer, programming languages"><meta name="viewport" content="width=device-width, initial-scale=1"><!--Place favicon.ico and apple-touch-icon.png in the root directory--><meta name="generator" content="DocPad v6.79.4" /><!-- Google Tag Manager--><script async src="https://www.googletagmanager.com/gtag/js?id=G-540M01NJGH"></script><script>window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-540M01NJGH');</script><!-- End Google Tag Manager--><link rel="icon" sizes="16x16 32x32" href="/favicon.ico?v=1"><link  rel="stylesheet" href="/css/vendor/normalize.css" /><link  rel="stylesheet" href="/css/vendor/main.css" /><link  rel="stylesheet" href="/css/vendor/bootstrap.min.css" /><link  rel="stylesheet" href="//netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css" /><link  rel="stylesheet" href="/css/style.css" /><script src="/js/vendor/modernizr-2.6.2.min.js"></script></head><body><!-- Google Tag Manager--><noscript><iframe src="//www.googletagmanager.com/ns.html?id=GTM-WDKMR7" height="0" width="0" style="display: none; visibility: hidden;"></iframe></noscript><!-- End Google Tag Manager--><!--if lt IE 8p.browsehappy
+    |You are using an
+    strong
+        |outdated browser
+    |. Please
+    a(href="http://browsehappy.com/")
+        |upgrade your browser
+    |to improve your experience.
+--><div id="wrap"><div role="navigation" class="navbar navbar-ornament navbar-fixed-top"><div class="container"><div class="navbar-header"><a href="/" class="navbar-brand">marisks # code</a></div></div></div><div class="container"><div class="row"><div class="col-sm-8"><article><header><h1>Episerver Content Events Explained</h1><p class="meta"><time datetime="2017-01-22T00:00:00.000Z">Sun Jan 22 2017</time></p></header><div class="lead"><p>There are times when you need to be notified about some actions happening in the Episerver and execute the code when it happens. Episerver has built-in events which help to achieve it. In this article, I will describe content events which are implemented through IContentEvents interface.</p>
+
+</div><p>While <em>IContentEvents</em> interface is <a href="http://world.episerver.com/documentation/Class-library/?documentId=cms/9/34FD9C4D">documented</a> quite well, there are some missing parts which are described in this article. Mainly, I focused on the event arguments passed into the event handler. As an event consumer, I care about those the most.</p>
+<p>Unfortunately, there are a lot of inconsistencies with these arguments. Some events pass in different types of arguments. There are also different properties filled with different data leaving some properties with default values and some with event data.</p>
+<p>I haven&#39;t repeated a description of the events which can be found in the <em>IContentEvents</em> <a href="http://world.episerver.com/documentation/Class-library/?documentId=cms/9/34FD9C4D">documentation</a> and in the source code (you can see documentation through IntelliSense), just added a short description. When I haven&#39;t mentioned some event argument&#39;s property, then assume that it has a default value.</p>
+<h1 id="event-arguments">Event arguments</h1>
+<p>Here is the list of all event argument types used by events in the <em>IContentEvents</em> interface:</p>
+<ul>
+<li><em>ContentEventArgs</em></li>
+<li><em>ContentLanguageEventArgs</em></li>
+<li><em>CopyContentEventArgs</em></li>
+<li><em>DeleteContentEventArgs</em></li>
+<li><em>MoveContentEventArgs</em></li>
+<li><em>SaveContentEventArgs</em></li>
+<li><em>ChildrenEventArgs</em></li>
+</ul>
+<h1 id="events">Events</h1>
+<h2 id="loadingchildren-loadedchildren-and-failedloadingchildren-events">LoadingChildren, LoadedChildren, and FailedLoadingChildren events</h2>
+<p>These events are raised on child content loading in the <em>IContentLoader.GetChildren&lt;T&gt;</em> implementations.</p>
+<h3 id="loadingchildren">LoadingChildren</h3>
+<p>Raised: Before loading child content<br>Arguments:</p>
+<ul>
+<li><em>ChildrenEventArgs</em> with:<ul>
+<li><em>ContentLink</em> - content link passed to <em>IContentLoader.GetChildren&lt;T&gt;</em> but without version</li>
+<li><em>ChildrenItems</em> - <em>null</em></li>
+</ul>
+</li>
+</ul>
+<h3 id="loadedchildren">LoadedChildren</h3>
+<p>Raised: After child content loaded<br>Arguments:</p>
+<ul>
+<li><em>ChildrenEventArgs</em> with:<ul>
+<li><em>ContentLink</em> - content link passed to <em>IContentLoader.GetChildren&lt;T&gt;</em> but without version</li>
+<li><em>ChildrenItems</em> - loaded child content</li>
+</ul>
+</li>
+</ul>
+<h3 id="failedloadingchildren">FailedLoadingChildren</h3>
+<p>Raised: On exception during child content loading<br>Arguments:</p>
+<ul>
+<li><em>ChildrenEventArgs</em> with:<ul>
+<li><em>ContentLink</em> - content link passed to <em>IContentLoader.GetChildren&lt;T&gt;</em> but without version</li>
+<li><em>ChildrenItems</em> - can be <em>null</em> or loaded child content which can be loaded only partially</li>
+</ul>
+</li>
+</ul>
+<h2 id="loadingcontent-loadedcontent-and-failedloadingcontent-events">LoadingContent, LoadedContent, and FailedLoadingContent events</h2>
+<p>These events are raised on content loading in different methods of <em>IContentLoader</em> implementions.</p>
+<h3 id="loadingcontent">LoadingContent</h3>
+<p>Raised: Before loading content but sometimes after content loaded (for example, in the <em>GetBySegment</em> method).<br>Arguments:</p>
+<ul>
+<li><em>ContentEventArgs</em> with:<ul>
+<li><em>ContentLink</em> - loading content&#39;s content link</li>
+<li><em>TargetLink</em> - <em>null</em></li>
+</ul>
+</li>
+</ul>
+<h3 id="loadedcontent">LoadedContent</h3>
+<p>Raised: After content loaded<br>Arguments:</p>
+<ul>
+<li><em>ContentEventArgs</em> with:<ul>
+<li><em>ContentLink</em> - loading content&#39;s content link</li>
+<li><em>TargetLink</em> - <em>null</em></li>
+<li><em>Content</em> - loaded content</li>
+</ul>
+</li>
+</ul>
+<h3 id="failedloadingcontent">FailedLoadingContent</h3>
+<p>Raised: On exception during content loading or when no content loaded (content is <em>null</em>)<br>Arguments:</p>
+<ul>
+<li><em>ContentEventArgs</em> with:<ul>
+<li><em>ContentLink</em> - loading content&#39;s content link</li>
+<li><em>TargetLink</em> - <em>null</em></li>
+<li><em>Content</em> - <em>null</em></li>
+</ul>
+</li>
+</ul>
+<h2 id="loadingdefaultcontent-and-loadeddefaultcontent-events">LoadingDefaultContent and LoadedDefaultContent events</h2>
+<p>These events are raised on new content item creation in the <em>IContentRepository.GetDefault&lt;T&gt;</em> and <em>IContentRepository.CreateLanguageBranch&lt;T&gt;</em> implementions.</p>
+<h3 id="loadingdefaultcontent">LoadingDefaultContent</h3>
+<p>Raised: Before creating new content item<br>Arguments:</p>
+<ul>
+<li><em>ContentEventArgs</em> with:<ul>
+<li><em>ContentLink</em><ul>
+<li>empty content reference when raised from <em>IContentRepository.GetDefault&lt;T&gt;</em></li>
+<li>source content&#39;s content link without version when raised from <em>IContentRepository.CreateLanguageBranch&lt;T&gt;</em></li>
+</ul>
+</li>
+<li><em>TargetLink</em><ul>
+<li>parent content link when raised from <em>IContentRepository.GetDefault&lt;T&gt;</em></li>
+<li>default value when raised from <em>IContentRepository.CreateLanguageBranch&lt;T&gt;</em></li>
+</ul>
+</li>
+<li><em>Content</em> - <em>null</em></li>
+<li><em>RequiredAccess</em><ul>
+<li>default value when raised from <em>IContentRepository.GetDefault&lt;T&gt;</em></li>
+<li><em>AccessLevel.Edit</em> when raised from <em>IContentRepository.CreateLanguageBranch&lt;T&gt;</em></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<h3 id="loadeddefaultcontent">LoadedDefaultContent</h3>
+<p>Raised: After new content item created<br>Arguments:</p>
+<ul>
+<li><em>ContentEventArgs</em> with:<ul>
+<li><em>ContentLink</em><ul>
+<li>empty content reference when raised from <em>IContentRepository.GetDefault&lt;T&gt;</em></li>
+<li>source content&#39;s content link without version when raised from <em>IContentRepository.CreateLanguageBranch&lt;T&gt;</em></li>
+</ul>
+</li>
+<li><em>TargetLink</em><ul>
+<li>parent content link when raised from <em>IContentRepository.GetDefault&lt;T&gt;</em></li>
+<li>default value when raised from <em>IContentRepository.CreateLanguageBranch&lt;T&gt;</em></li>
+</ul>
+</li>
+<li><em>Content</em> - created content</li>
+<li><em>RequiredAccess</em><ul>
+<li>default value when raised from <em>IContentRepository.GetDefault&lt;T&gt;</em></li>
+<li><em>AccessLevel.Edit</em> when raised from <em>IContentRepository.CreateLanguageBranch&lt;T&gt;</em></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<h2 id="publishingcontent-and-publishedcontent-events">PublishingContent and PublishedContent events</h2>
+<p>These events are raised on content publishing in the <em>IContentRepository</em> implementations.</p>
+<h3 id="publishingcontent">PublishingContent</h3>
+<p>Raised: Before content saving and when <em>Transition.NextStatus</em> is <em>VersionStatus.Published</em><br>Arguments:</p>
+<ul>
+<li><em>SaveContentEventArgs</em> as <em>ContentEventArgs</em> with:<ul>
+<li><em>ContentLink</em> - publishing content&#39;s content link</li>
+<li><em>Content</em> - publishing content</li>
+<li><em>SaveAction</em> - <em>SaveAction.Schedule</em> or <em>SaveAction.Publish</em></li>
+<li><em>Transition</em> - evaluated transition based on content and save action</li>
+<li><em>RequiredAccess</em> - access level passed into save or publish method</li>
+</ul>
+</li>
+</ul>
+<h3 id="publishedcontent">PublishedContent</h3>
+<p>Raised: After content saving and when <em>Transition.NextStatus</em> is <em>VersionStatus.Published</em><br>Arguments:</p>
+<ul>
+<li><em>SaveContentEventArgs</em> as <em>ContentEventArgs</em> with:<ul>
+<li><em>ContentLink</em> - updated publishing content&#39;s content link</li>
+<li><em>Content</em> - updated publishing content</li>
+<li><em>SaveAction</em> - <em>SaveAction.Schedule</em> or <em>SaveAction.Publish</em></li>
+<li><em>Transition</em> - evaluated transition based on content and save action</li>
+<li><em>RequiredAccess</em> - access level passed into save or publish method</li>
+</ul>
+</li>
+</ul>
+<h2 id="checkingincontent-and-checkedincontent-events">CheckingInContent and CheckedInContent events</h2>
+<p>These events are raised on content checking in in the <em>IContentRepository</em> implementations.</p>
+<h3 id="checkingincontent">CheckingInContent</h3>
+<p>Raised: Before content saving and when <em>Transition.NextStatus</em> is <em>VersionStatus.CheckedIn</em> or <em>VersionStatus.DelayedPublish</em><br>Arguments:</p>
+<ul>
+<li><em>SaveContentEventArgs</em> as <em>ContentEventArgs</em> with:<ul>
+<li><em>ContentLink</em> - checking in content&#39;s content link</li>
+<li><em>Content</em> - checking in content</li>
+<li><em>SaveAction</em> - save action passed into save method</li>
+<li><em>Transition</em> - evaluated transition based on content and save action</li>
+<li><em>RequiredAccess</em> - access level passed into save method</li>
+</ul>
+</li>
+</ul>
+<h3 id="checkedincontent">CheckedInContent</h3>
+<p>Raised: After content saving and when <em>Transition.NextStatus</em> is <em>VersionStatus.CheckedIn</em> or <em>VersionStatus.DelayedPublish</em><br>Arguments:</p>
+<ul>
+<li><em>SaveContentEventArgs</em> as <em>ContentEventArgs</em> with:<ul>
+<li><em>ContentLink</em> - updated checking in content&#39;s content link</li>
+<li><em>Content</em> - updated checking in content</li>
+<li><em>SaveAction</em> - save action passed into save method</li>
+<li><em>Transition</em> - evaluated transition based on content and save action</li>
+<li><em>RequiredAccess</em> - access level passed into save method</li>
+</ul>
+</li>
+</ul>
+<h2 id="requestingapproval-and-requestedapproval-events">RequestingApproval and RequestedApproval events</h2>
+<p>These events are raised on content requesting approval in the <em>IContentRepository</em> implementations.</p>
+<h3 id="requestingapproval">RequestingApproval</h3>
+<p>Raised: Before content saving and when <em>Transition.NextStatus</em> is _VersionStatus.AwaitingApproval__<br>Arguments:</p>
+<ul>
+<li><em>SaveContentEventArgs</em> as <em>ContentEventArgs</em> with:<ul>
+<li><em>ContentLink</em> - requesting approval content&#39;s content link</li>
+<li><em>Content</em> - requesting approval content</li>
+<li><em>SaveAction</em> - save action passed into save method</li>
+<li><em>Transition</em> - evaluated transition based on content and save action</li>
+<li><em>RequiredAccess</em> - access level passed into save method</li>
+</ul>
+</li>
+</ul>
+<h3 id="requestedapproval">RequestedApproval</h3>
+<p>Raised: After content saving and when <em>Transition.NextStatus</em> is <em>VersionStatus.AwaitingApproval</em><br>Arguments:</p>
+<ul>
+<li><em>SaveContentEventArgs</em> as <em>ContentEventArgs</em> with:<ul>
+<li><em>ContentLink</em> - updated requesting approval content&#39;s content link</li>
+<li><em>Content</em> - updated requesting approval content</li>
+<li><em>SaveAction</em> - save action passed into save method</li>
+<li><em>Transition</em> - evaluated transition based on content and save action</li>
+<li><em>RequiredAccess</em> - access level passed into save method</li>
+</ul>
+</li>
+</ul>
+<h2 id="rejectingcontent-and-rejectedcontent-events">RejectingContent and RejectedContent events</h2>
+<p>These events are raised on content rejecting in the <em>IContentRepository</em> implementations.</p>
+<h3 id="rejectingcontent">RejectingContent</h3>
+<p>Raised: Before content saving and when <em>Transition.NextStatus</em> is _VersionStatus.Rejected__<br>Arguments:</p>
+<ul>
+<li><em>SaveContentEventArgs</em> as <em>ContentEventArgs</em> with:<ul>
+<li><em>ContentLink</em> - rejected content&#39;s content link</li>
+<li><em>Content</em> - rejected content</li>
+<li><em>SaveAction</em> - save action passed into save method</li>
+<li><em>Transition</em> - evaluated transition based on content and save action</li>
+<li><em>RequiredAccess</em> - access level passed into save method</li>
+</ul>
+</li>
+</ul>
+<h3 id="rejectedcontent">RejectedContent</h3>
+<p>Raised: After content saving and when <em>Transition.NextStatus</em> is <em>VersionStatus.Rejected</em><br>Arguments:</p>
+<ul>
+<li><em>SaveContentEventArgs</em> as <em>ContentEventArgs</em> with:<ul>
+<li><em>ContentLink</em> - updated rejected content&#39;s content link</li>
+<li><em>Content</em> - updated rejected content</li>
+<li><em>SaveAction</em> - save action passed into save method</li>
+<li><em>Transition</em> - evaluated transition based on content and save action</li>
+<li><em>RequiredAccess</em> - access level passed into save method</li>
+</ul>
+</li>
+</ul>
+<h2 id="checkingoutcontent-and-checkedoutcontent-events">CheckingOutContent and CheckedOutContent events</h2>
+<p>These events are raised on content checking out in the <em>IContentRepository</em> implementations.</p>
+<h3 id="checkingoutcontent">CheckingOutContent</h3>
+<p>Raised: Before content saving and when <em>Transition.NextStatus</em> is _VersionStatus.CheckedOut__<br>Arguments:</p>
+<ul>
+<li><em>SaveContentEventArgs</em> as <em>ContentEventArgs</em> with:<ul>
+<li><em>ContentLink</em> - checking out content&#39;s content link</li>
+<li><em>Content</em> - checking out content</li>
+<li><em>SaveAction</em> - save action passed into save method</li>
+<li><em>Transition</em> - evaluated transition based on content and save action</li>
+<li><em>RequiredAccess</em> - access level passed into save method</li>
+</ul>
+</li>
+</ul>
+<h3 id="checkedoutcontent">CheckedOutContent</h3>
+<p>Raised: After content saving and when <em>Transition.NextStatus</em> is <em>VersionStatus.CheckedOut</em><br>Arguments:</p>
+<ul>
+<li><em>SaveContentEventArgs</em> as <em>ContentEventArgs</em> with:<ul>
+<li><em>ContentLink</em> - updated checking out content&#39;s content link</li>
+<li><em>Content</em> - updated checking out content</li>
+<li><em>SaveAction</em> - save action passed into save method</li>
+<li><em>Transition</em> - evaluated transition based on content and save action</li>
+<li><em>RequiredAccess</em> - access level passed into save method</li>
+</ul>
+</li>
+</ul>
+<h2 id="schedulingcontent-and-scheduledcontent-events">SchedulingContent and ScheduledContent events</h2>
+<p>These events are raised on content scheduling in the <em>IContentRepository</em> implementations.</p>
+<h3 id="schedulingcontent">SchedulingContent</h3>
+<p>Raised: Before content saving and when <em>Transition.NextStatus</em> is _VersionStatus.DelayedPublish__<br>Arguments:</p>
+<ul>
+<li><em>SaveContentEventArgs</em> as <em>ContentEventArgs</em> with:<ul>
+<li><em>ContentLink</em> - scheduling content&#39;s content link</li>
+<li><em>Content</em> - scheduling content</li>
+<li><em>SaveAction</em> - save action passed into save method</li>
+<li><em>Transition</em> - evaluated transition based on content and save action</li>
+<li><em>RequiredAccess</em> - access level passed into save method</li>
+</ul>
+</li>
+</ul>
+<h3 id="scheduledcontent">ScheduledContent</h3>
+<p>Raised: After content saving and when <em>Transition.NextStatus</em> is <em>VersionStatus.DelayedPublish</em><br>Arguments:</p>
+<ul>
+<li><em>SaveContentEventArgs</em> as <em>ContentEventArgs</em> with:<ul>
+<li><em>ContentLink</em> - updated scheduling content&#39;s content link</li>
+<li><em>Content</em> - updated scheduling content</li>
+<li><em>SaveAction</em> - save action passed into save method</li>
+<li><em>Transition</em> - evaluated transition based on content and save action</li>
+<li><em>RequiredAccess</em> - access level passed into save method</li>
+</ul>
+</li>
+</ul>
+<h2 id="deletingcontent-and-deletedcontent-events">DeletingContent and DeletedContent events</h2>
+<p>These events are raised on content or content&#39;s children deleting in the <em>IContentRepository</em> implementations.</p>
+<h3 id="deletingcontent">DeletingContent</h3>
+<p>Raised: Before content deleting or content&#39;s children deleting<br>Arguments:</p>
+<ul>
+<li><em>DeleteContentEventArgs</em> with:<ul>
+<li><em>ContentLink</em> -<ul>
+<li>content&#39;s link without version when raised from <em>IContentRepository.Delete</em></li>
+<li>content&#39;s link when raised from <em>IContentRepository.DeleteChildren</em></li>
+</ul>
+</li>
+<li><em>TargetLink</em> -<ul>
+<li>default value when raised from <em>IContentRepository.Delete</em></li>
+<li>content&#39;s link when raised from <em>IContentRepository.DeleteChildren</em></li>
+</ul>
+</li>
+<li><em>RequiredAccess</em> - access level passed into delete method</li>
+<li><em>DeletedDescendents</em> - content&#39;s descendant links</li>
+</ul>
+</li>
+</ul>
+<h3 id="deletedcontent">DeletedContent</h3>
+<p>Raised: After content deleting or content&#39;s children deleting<br>Arguments:</p>
+<ul>
+<li><em>DeleteContentEventArgs</em> with:<ul>
+<li><em>ContentLink</em> -<ul>
+<li>content&#39;s link without version when raised from <em>IContentRepository.Delete</em></li>
+<li>content&#39;s link when raised from <em>IContentRepository.DeleteChildren</em></li>
+</ul>
+</li>
+<li><em>TargetLink</em> -<ul>
+<li>default value when raised from <em>IContentRepository.Delete</em></li>
+<li>content&#39;s link when raised from <em>IContentRepository.DeleteChildren</em></li>
+</ul>
+</li>
+<li><em>RequiredAccess</em> - access level passed into delete method</li>
+<li><em>DeletedDescendents</em> - content&#39;s descendant links</li>
+<li><em>Items[&quot;DeletedItemGuids&quot;]</em><ul>
+<li>content&#39;s Guid and its descendant Guids when raised from <em>IContentRepository.Delete</em></li>
+<li>content&#39;s descendant Guids when raised from <em>IContentRepository.DeleteChildren</em></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<h2 id="creatingcontentlanguage-and-createdcontentlanguage-events">CreatingContentLanguage and CreatedContentLanguage events</h2>
+<p>These events are raised on content new language branch creating in the <em>IContentRepository</em> implementations.</p>
+<h3 id="creatingcontentlanguage">CreatingContentLanguage</h3>
+<p>Raised: Before content saving if a new language branch is created<br>Arguments:</p>
+<ul>
+<li><em>SaveContentEventArgs</em> as <em>ContentEventArgs</em> with:<ul>
+<li><em>ContentLink</em> - created content&#39;s content link</li>
+<li><em>Content</em> - created content</li>
+<li><em>SaveAction</em> - save action passed into save method</li>
+<li><em>Transition</em> - evaluated transition based on content and save action</li>
+<li><em>RequiredAccess</em> - access level passed into save method</li>
+</ul>
+</li>
+</ul>
+<h3 id="createdcontentlanguage">CreatedContentLanguage</h3>
+<p>Raised: After content saving if a new language branch is created<br>Arguments:</p>
+<ul>
+<li><em>SaveContentEventArgs</em> as <em>ContentEventArgs</em> with:<ul>
+<li><em>ContentLink</em> - updated created content&#39;s content link</li>
+<li><em>Content</em> - updated created content</li>
+<li><em>SaveAction</em> - save action passed into save method</li>
+<li><em>Transition</em> - evaluated transition based on content and save action</li>
+<li><em>RequiredAccess</em> - access level passed into save method</li>
+</ul>
+</li>
+</ul>
+<h2 id="deletingcontentlanguage-and-deletedcontentlanguage-events">DeletingContentLanguage and DeletedContentLanguage events</h2>
+<p>These events are raised on content language branch deleting in the <em>IContentRepository</em> implementations.</p>
+<h3 id="deletingcontentlanguage">DeletingContentLanguage</h3>
+<p>Raised: Before deleting a language branch<br>Arguments:</p>
+<ul>
+<li><em>ContentLanguageEventArgs</em> as <em>ContentEventArgs</em> with:<ul>
+<li><em>Content</em> - deleted language branch content</li>
+<li><em>ContentLink</em> - deleted language branch content&#39;s content link</li>
+<li><em>Language</em> - deleted language branch language</li>
+<li><em>MasterLanguage</em> - deleted language branch master language</li>
+<li><em>RequiredAccess</em> - access level passed into delete method</li>
+</ul>
+</li>
+</ul>
+<h3 id="deletedcontentlanguage">DeletedContentLanguage</h3>
+<p>Raised: After deleting a language branch<br>Arguments:</p>
+<ul>
+<li><em>ContentLanguageEventArgs</em> as <em>ContentEventArgs</em> with:<ul>
+<li><em>Content</em> - deleted language branch content</li>
+<li><em>ContentLink</em> - deleted language branch content&#39;s content link</li>
+<li><em>Language</em> - deleted language branch language</li>
+<li><em>MasterLanguage</em> - deleted language branch master language</li>
+<li><em>RequiredAccess</em> - access level passed into delete method</li>
+</ul>
+</li>
+</ul>
+<h2 id="movingcontent-and-movedcontent-events">MovingContent and MovedContent events</h2>
+<p>These events are raised on content moving including moving to wastebasket in the <em>IContentRepository</em> implementations.</p>
+<h3 id="movingcontent">MovingContent</h3>
+<p>Raised: Before moving content<br>Arguments:</p>
+<ul>
+<li><em>MoveContentEventArgs</em> as <em>ContentEventArgs</em> with:<ul>
+<li><em>ContentLink</em> - moving content&#39;s content link without version</li>
+<li><em>TargetLink</em> - destination content&#39;s content link</li>
+<li><em>OriginalParent</em> - original parent content&#39;s content link</li>
+<li><em>Descendents</em> - content&#39;s descendant content links</li>
+<li><em>Content</em> - moving content</li>
+</ul>
+</li>
+</ul>
+<h3 id="movedcontent">MovedContent</h3>
+<p>Raised: After moving content<br>Arguments:</p>
+<ul>
+<li><em>MoveContentEventArgs</em> as <em>ContentEventArgs</em> with:<ul>
+<li><em>ContentLink</em> - moving content&#39;s content link without version</li>
+<li><em>TargetLink</em> - destination content&#39;s content link</li>
+<li><em>OriginalParent</em> - original parent content&#39;s content link</li>
+<li><em>Descendents</em> - content&#39;s descendant content links</li>
+<li><em>Content</em> - updated moving content</li>
+</ul>
+</li>
+</ul>
+<h2 id="creatingcontent-and-createdcontent-events">CreatingContent and CreatedContent events</h2>
+<p>These events are raised on content saving and copying in the <em>IContentRepository</em> implementations.</p>
+<h3 id="creatingcontent">CreatingContent</h3>
+<p>Raised: Before content saving if a new content is created including during copying<br>Arguments:</p>
+<ul>
+<li><em>SaveContentEventArgs</em> as <em>ContentEventArgs</em> with:<ul>
+<li><em>ContentLink</em> - created content&#39;s content link</li>
+<li><em>Content</em> - created content</li>
+<li><em>SaveAction</em> - save action passed into save method</li>
+<li><em>Transition</em> - evaluated transition based on content and save action</li>
+<li><em>RequiredAccess</em> - access level passed into save method</li>
+</ul>
+</li>
+<li><em>CopyContentEventArgs</em> as <em>ContentEventArgs</em> on copying with:<ul>
+<li><em>ContentLink</em> - empty content link</li>
+<li><em>SourceContentLink</em> - source content&#39;s content link</li>
+<li><em>TargetLink</em> - destination content&#39;s content link</li>
+<li><em>RequiredAccess</em> - access level passed into copy method</li>
+</ul>
+</li>
+</ul>
+<h3 id="createdcontent">CreatedContent</h3>
+<p>Raised: After content saving if a new content is created including during copying<br>Arguments:</p>
+<ul>
+<li><em>SaveContentEventArgs</em> as <em>ContentEventArgs</em> with:<ul>
+<li><em>ContentLink</em> - created content&#39;s content link</li>
+<li><em>Content</em> - created content</li>
+<li><em>SaveAction</em> - save action passed into save method</li>
+<li><em>Transition</em> - evaluated transition based on content and save action</li>
+<li><em>RequiredAccess</em> - access level passed into save method</li>
+</ul>
+</li>
+<li><em>CopyContentEventArgs</em> as <em>ContentEventArgs</em> on copying with:<ul>
+<li><em>ContentLink</em> - created content&#39;s content link</li>
+<li><em>SourceContentLink</em> - source content&#39;s content link</li>
+<li><em>TargetLink</em> - destination content&#39;s content link</li>
+<li><em>RequiredAccess</em> - access level passed into copy method</li>
+</ul>
+</li>
+</ul>
+<h2 id="savingcontent-and-savedcontent-events">SavingContent and SavedContent events</h2>
+<p>These events are raised on content saving in the <em>IContentRepository</em> implementations. These events are always raised before one of the other saving events like <em>PublishingContent</em> and <em>PublishedContent</em>.</p>
+<h3 id="savingcontent">SavingContent</h3>
+<p>Raised: Before content saving<br>Arguments:</p>
+<ul>
+<li><em>SaveContentEventArgs</em> as <em>ContentEventArgs</em> with:<ul>
+<li><em>ContentLink</em> - saved content&#39;s content link</li>
+<li><em>Content</em> - saved content</li>
+<li><em>SaveAction</em> - save action passed into save method</li>
+<li><em>Transition</em> - evaluated transition based on content and save action</li>
+<li><em>RequiredAccess</em> - access level passed into save method</li>
+</ul>
+</li>
+</ul>
+<h3 id="savedcontent">SavedContent</h3>
+<p>Raised: After content saving<br>Arguments:</p>
+<ul>
+<li><em>SaveContentEventArgs</em> as <em>ContentEventArgs</em> with:<ul>
+<li><em>ContentLink</em> - updated saved content&#39;s content link</li>
+<li><em>Content</em> - updated saved content</li>
+<li><em>SaveAction</em> - save action passed into save method</li>
+<li><em>Transition</em> - evaluated transition based on content and save action</li>
+<li><em>RequiredAccess</em> - access level passed into save method</li>
+</ul>
+</li>
+</ul>
+<h2 id="deletingcontentversion-and-deletedcontentversion-events">DeletingContentVersion and DeletedContentVersion events</h2>
+<p>These events are raised on content&#39;s version deleting in the <em>IContentVersionRepository</em> implementations.</p>
+<h3 id="deletingcontentversion">DeletingContentVersion</h3>
+<p>Raised: Before deleting content version<br>Arguments:</p>
+<ul>
+<li><em>ContentEventArgs</em> with:<ul>
+<li><em>ContentLink</em> - deleting content version content&#39;s content link</li>
+<li><em>RequiredAccess</em> - access level passed into delete method</li>
+</ul>
+</li>
+</ul>
+<h3 id="deletedcontentversion">DeletedContentVersion</h3>
+<p>Raised: After deleting content version<br>Arguments:</p>
+<ul>
+<li><em>ContentEventArgs</em> with:<ul>
+<li><em>ContentLink</em> - deleting content version content&#39;s content link</li>
+<li><em>RequiredAccess</em> - access level passed into delete method</li>
+</ul>
+</li>
+</ul>
+</article><div id="disqus_thread"></div><script>/* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+var disqus_shortname = 'marisksblog'; // required: replace example with your forum shortname
+
+/* * * DON'T EDIT BELOW THIS LINE * * */
+(function() {
+  var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+  dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+  (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();</script><noscript>Please enable JavaScript to view the<a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a><a href="http://disqus.com" class="dsq-brlink">comments powered by<span class="logo-disqus">Disqus</span></a></noscript></div><div class="col-sm-1"><aside class="archive"><ul class="nav"><li><a href="/">2021</a></li><li><a href="/2020/">2020</a></li><li><a href="/2019/">2019</a></li><li><a href="/2018/">2018</a></li><li class="active"><a href="/2017/">2017</a></li><li><a href="/2016/">2016</a></li><li><a href="/2015/">2015</a></li><li><a href="/2014/">2014</a></li><li><a href="/2013/">2013</a></li><li><a href="/2012/">2012</a></li></ul></aside></div><div class="col-sm-3"><aside class="panel panel-default"><div class="panel-body"><div class="about"><img src="/img/common/profile_0021.jpg" alt="profile picture" class="center-block img-responsive thumbnail"><p>Hi! I'm Māris Krivtežs. I am Web developer primarily working with ASP.NET, EPiServer and front-end development at&nbsp;<a href="http://geta.no" target="_blank">Geta</a>, but same time learning different programming languages, learning new programming paradigms, architectures, and design. I spend my free time with my family, reading books, bicycling and traveling.</p></div><ul class="social"><li><a href="http://stackoverflow.com/users/660154/marisks" target="_blank"><i class="fa fa-stack-overflow"></i></a></li><li><a href="https://github.com/marisks" target="_blank"><i class="fa fa-github-alt"></i></a></li><li><a href="https://twitter.com/pioners1001" target="_blank"><i class="fa fa-twitter"></i></a></li><li><a href="http://www.linkedin.com/pub/maris-krivtezs/31/98b/b53" target="_blank"><i class="fa fa-linkedin"></i></a></li><li><a href="/rss.xml" target="_blank"><i class="fa fa-rss"></i></a></li></ul><a href="https://getadigital.com" target="_blank"><img src="/img/common/ident-geta-wordmark.svg" alt="Geta logo" class="center-block img-responsive aside-logo"></a></div></aside></div></div></div></div><div id="footer"><div class="container"><div class="container credit">Copyright &copy; 2017 Maris Krivtezs. All Rights Reserved, except for the parts enumerated below:<ul class="licence-list"><li>- The source code examples on this blog are covered by&nbsp;<a href="https://opensource.org/licenses/mit-license.php">MIT License</a>.</li><li>- This page content, excluding the visual design and the logotype, is covered by&nbsp;<a href="http://creativecommons.org/licenses/by/4.0/">Creative Commons Attribution 4.0 International License</a>.</li></ul></div></div></div><script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><script>window.jQuery || document.write('<script src="/js/vendor/jquery-1.10.2.min.js"><\/script>')</script><script  src="/bower_components/bootstrap/dist/js/bootstrap.min.js"></script><script  src="/js/plugins.js"></script><script  src="/js/main.js"></script></body>

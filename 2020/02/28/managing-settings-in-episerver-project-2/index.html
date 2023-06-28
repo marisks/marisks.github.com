@@ -1,0 +1,83 @@
+<!DOCTYPE html><!--if lt IE 8html.no-js.lt-ie9.lt-ie8(lang="en")--><!--if IE 8html.no-js.lt-ie9(lang="en")--><!--if gt IE 8html.no-js(lang="en")--><head><meta charset="utf-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><title>Managing settings in Episerver project - part 2 | marisks # code</title><meta name="description" content="When you have a big Episerver project, you need to maintain a lot of settings. The approaches described in the previous article does not scale well. In this article, I will show you how to improve Episerver specific settings."><meta name="keywords" content=".NET, ASP.NET, C#, JavaScript, Optimizely, EPiServer, programming languages"><meta name="viewport" content="width=device-width, initial-scale=1"><!--Place favicon.ico and apple-touch-icon.png in the root directory--><meta name="generator" content="DocPad v6.79.4" /><!-- Google Tag Manager--><script async src="https://www.googletagmanager.com/gtag/js?id=G-540M01NJGH"></script><script>window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-540M01NJGH');</script><!-- End Google Tag Manager--><link rel="icon" sizes="16x16 32x32" href="/favicon.ico?v=1"><link  rel="stylesheet" href="/css/vendor/normalize.css" /><link  rel="stylesheet" href="/css/vendor/main.css" /><link  rel="stylesheet" href="/css/vendor/bootstrap.min.css" /><link  rel="stylesheet" href="//netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css" /><link  rel="stylesheet" href="/css/style.css" /><script src="/js/vendor/modernizr-2.6.2.min.js"></script></head><body><!-- Google Tag Manager--><noscript><iframe src="//www.googletagmanager.com/ns.html?id=GTM-WDKMR7" height="0" width="0" style="display: none; visibility: hidden;"></iframe></noscript><!-- End Google Tag Manager--><!--if lt IE 8p.browsehappy
+    |You are using an
+    strong
+        |outdated browser
+    |. Please
+    a(href="http://browsehappy.com/")
+        |upgrade your browser
+    |to improve your experience.
+--><div id="wrap"><div role="navigation" class="navbar navbar-ornament navbar-fixed-top"><div class="container"><div class="navbar-header"><a href="/" class="navbar-brand">marisks # code</a></div></div></div><div class="container"><div class="row"><div class="col-sm-8"><article><header><h1>Managing settings in Episerver project - part 2</h1><p class="meta"><time datetime="2020-02-28T00:00:00.000Z">Fri Feb 28 2020</time></p></header><div class="lead"><p>When you have a big Episerver project, you need to maintain a lot of settings. The approaches described in the previous article does not scale well. In this article, I will show you how to improve Episerver specific settings.</p>
+
+</div><h1 id="grouping-settings-in-tabs">Grouping settings in tabs</h1>
+<p>The easiest way to improve the way how settings are displayed for the users (administrators), is by grouping those in tabs. For example, you have several setting properties on the start page, and those are mixed now with other properties.</p>
+<pre><code class="lang-csharp">[ContentType(GUID = &quot;6C709414-18C6-4E97-9B83-7220FA87D05A&quot;, Order = 10, AvailableInEditMode = true)]
+public class StartPage : PageData
+{
+    [CultureSpecific]
+    public virtual string Header { get; set; }
+
+    public virtual Url FacebookUrl { get; set; }
+}
+</code></pre>
+<p>The <code>Header</code> property, in this example, is displayed on the start page, but <code>FacebookUrl</code> is used for the whole site. So the last one is a setting we would not like to see mixed with start page related stuff in UI.</p>
+<p>By adding the <code>Display</code> attribute and setting <code>GroupName</code> property on it, we will move the setting property to the separate tab in UI.</p>
+<pre><code class="lang-csharp">[ContentType(GUID = &quot;6C709414-18C6-4E97-9B83-7220FA87D05A&quot;, Order = 10, AvailableInEditMode = true)]
+public class StartPage : PageData
+{
+    [CultureSpecific]
+    public virtual string Header { get; set; }
+
+    [Display(GroupName = &quot;Site Settings&quot;)]
+    public virtual Url FacebookUrl { get; set; }
+}
+</code></pre>
+<p>It is also a good approach to extract group name constants into a separate class and add <code>GroupDefinitions</code> attribute so that <em>Episerver</em> will pick it up. For more info, read <a href="https://world.episerver.com/documentation/developer-guides/CMS/Content/grouping-content-types-and-properties/"><em>Episerver</em> documentation</a>.</p>
+<pre><code class="lang-csharp">[GroupDefinitions]
+public static class GroupNames
+{
+    [Display(GroupName = &quot;Site settings&quot;, Order = 10)]
+    public const string SiteSettings = &quot;SiteSettings&quot;;
+}
+</code></pre>
+<h1 id="grouping-settings-with-local-blocks">Grouping settings with local blocks</h1>
+<p>While grouping with a <code>Display</code> attribute allows separating settings in UI, in code, the setting properties are kept together with content properties. One way to work around this issue is by creating blocks and adding those as properties to the start page.</p>
+<p>Create a block first.</p>
+<pre><code class="lang-csharp">[ContentType(GUID = &quot;13304E95-B697-444E-B0D4-F8806B70BF20&quot;)]
+public class SettingsBlock : BlockData
+{
+    public virtual Url FacebookUrl { get; set; }
+}
+</code></pre>
+<p>And then add it to the start page.</p>
+<pre><code class="lang-csharp">[ContentType(GUID = &quot;6C709414-18C6-4E97-9B83-7220FA87D05A&quot;, Order = 10, AvailableInEditMode = true)]
+public class StartPage : PageData
+{
+    [CultureSpecific]
+    public virtual string Header { get; set; }
+
+    [Display(GroupName = GroupNames.SiteSettings)]
+    public virtual SettingsBlock Settings { get; set; }
+}
+</code></pre>
+<p>As you see, I have kept the <code>Display</code> attribute and set <code>GroupName</code> so that the block with settings is still displayed in a separate tab.</p>
+<p>Now, when you need to use settings in your code, you can just pass <code>SettingsBlock</code> around and do not mess with other start page related settings.</p>
+<pre><code class="lang-csharp">var startPage = _contentLoader.Get(ContentReference.StartPage);
+var settings = startPage.Settings;
+
+DoSomething(settings);
+</code></pre>
+<h1 id="summary">Summary</h1>
+<p>As you see, there are some simple ways how to improve settings on your site for both - end-users in UI and developers in code. Though in large projects, it is not enough to add grouping or extract settings into a local block. You might need a more advanced approach. But that&#39;s for another time.</p>
+<p>P.S. Check out <a href="https://talk.alfnilsson.se/2014/04/01/creating-modular-settings-with-blocks/">Alf&#39;s blog</a> about his approach to managing settings.</p>
+</article><div id="disqus_thread"></div><script>/* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+var disqus_shortname = 'marisksblog'; // required: replace example with your forum shortname
+
+/* * * DON'T EDIT BELOW THIS LINE * * */
+(function() {
+  var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+  dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+  (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();</script><noscript>Please enable JavaScript to view the<a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a><a href="http://disqus.com" class="dsq-brlink">comments powered by<span class="logo-disqus">Disqus</span></a></noscript></div><div class="col-sm-1"><aside class="archive"><ul class="nav"><li><a href="/">2021</a></li><li class="active"><a href="/2020/">2020</a></li><li><a href="/2019/">2019</a></li><li><a href="/2018/">2018</a></li><li><a href="/2017/">2017</a></li><li><a href="/2016/">2016</a></li><li><a href="/2015/">2015</a></li><li><a href="/2014/">2014</a></li><li><a href="/2013/">2013</a></li><li><a href="/2012/">2012</a></li></ul></aside></div><div class="col-sm-3"><aside class="panel panel-default"><div class="panel-body"><div class="about"><img src="/img/common/profile_0021.jpg" alt="profile picture" class="center-block img-responsive thumbnail"><p>Hi! I'm Māris Krivtežs. I am Web developer primarily working with ASP.NET, EPiServer and front-end development at&nbsp;<a href="http://geta.no" target="_blank">Geta</a>, but same time learning different programming languages, learning new programming paradigms, architectures, and design. I spend my free time with my family, reading books, bicycling and traveling.</p></div><ul class="social"><li><a href="http://stackoverflow.com/users/660154/marisks" target="_blank"><i class="fa fa-stack-overflow"></i></a></li><li><a href="https://github.com/marisks" target="_blank"><i class="fa fa-github-alt"></i></a></li><li><a href="https://twitter.com/pioners1001" target="_blank"><i class="fa fa-twitter"></i></a></li><li><a href="http://www.linkedin.com/pub/maris-krivtezs/31/98b/b53" target="_blank"><i class="fa fa-linkedin"></i></a></li><li><a href="/rss.xml" target="_blank"><i class="fa fa-rss"></i></a></li></ul><a href="https://getadigital.com" target="_blank"><img src="/img/common/ident-geta-wordmark.svg" alt="Geta logo" class="center-block img-responsive aside-logo"></a></div></aside></div></div></div></div><div id="footer"><div class="container"><div class="container credit">Copyright &copy; 2017 Maris Krivtezs. All Rights Reserved, except for the parts enumerated below:<ul class="licence-list"><li>- The source code examples on this blog are covered by&nbsp;<a href="https://opensource.org/licenses/mit-license.php">MIT License</a>.</li><li>- This page content, excluding the visual design and the logotype, is covered by&nbsp;<a href="http://creativecommons.org/licenses/by/4.0/">Creative Commons Attribution 4.0 International License</a>.</li></ul></div></div></div><script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><script>window.jQuery || document.write('<script src="/js/vendor/jquery-1.10.2.min.js"><\/script>')</script><script  src="/bower_components/bootstrap/dist/js/bootstrap.min.js"></script><script  src="/js/plugins.js"></script><script  src="/js/main.js"></script></body>

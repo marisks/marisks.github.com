@@ -1,0 +1,98 @@
+<!DOCTYPE html><!--if lt IE 8html.no-js.lt-ie9.lt-ie8(lang="en")--><!--if IE 8html.no-js.lt-ie9(lang="en")--><!--if gt IE 8html.no-js(lang="en")--><head><meta charset="utf-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><title>EPiServer: working with Scheduled Jobs programmatically | marisks # code</title><meta name="description" content="EPiServer provides Scheduled Jobs to run background tasks on schedule. By default those have simple scheduling available, but sometimes you might need more advanced scheduling techniques. EPiServer provides API for that."><meta name="keywords" content=".NET, ASP.NET, C#, JavaScript, Optimizely, EPiServer, programming languages"><meta name="viewport" content="width=device-width, initial-scale=1"><!--Place favicon.ico and apple-touch-icon.png in the root directory--><meta name="generator" content="DocPad v6.79.4" /><!-- Google Tag Manager--><script async src="https://www.googletagmanager.com/gtag/js?id=G-540M01NJGH"></script><script>window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-540M01NJGH');</script><!-- End Google Tag Manager--><link rel="icon" sizes="16x16 32x32" href="/favicon.ico?v=1"><link  rel="stylesheet" href="/css/vendor/normalize.css" /><link  rel="stylesheet" href="/css/vendor/main.css" /><link  rel="stylesheet" href="/css/vendor/bootstrap.min.css" /><link  rel="stylesheet" href="//netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css" /><link  rel="stylesheet" href="/css/style.css" /><script src="/js/vendor/modernizr-2.6.2.min.js"></script></head><body><!-- Google Tag Manager--><noscript><iframe src="//www.googletagmanager.com/ns.html?id=GTM-WDKMR7" height="0" width="0" style="display: none; visibility: hidden;"></iframe></noscript><!-- End Google Tag Manager--><!--if lt IE 8p.browsehappy
+    |You are using an
+    strong
+        |outdated browser
+    |. Please
+    a(href="http://browsehappy.com/")
+        |upgrade your browser
+    |to improve your experience.
+--><div id="wrap"><div role="navigation" class="navbar navbar-ornament navbar-fixed-top"><div class="container"><div class="navbar-header"><a href="/" class="navbar-brand">marisks # code</a></div></div></div><div class="container"><div class="row"><div class="col-sm-8"><article><header><h1>EPiServer: working with Scheduled Jobs programmatically</h1><p class="meta"><time datetime="2015-05-04T00:00:00.000Z">Mon May 04 2015</time></p></header><div class="lead">EPiServer provides Scheduled Jobs to run background tasks on schedule. By default those have simple scheduling available, but sometimes you might need more advanced scheduling techniques. EPiServer provides API for that.</div><p>In older versions <em>EPiServer</em> had used <em>ScheduledJob</em> class as <a href="http://en.wikipedia.org/wiki/Active_record_pattern">active record</a> to manipulate <em>Scheduled Jobs</em>, but now all <em>active record</em> methods became obsolete. New way of working with <em>Scheduled Jobs</em> is using <em>ScheduledJobRepository</em>. It provides several methods to get and store <em>Scheduled Jobs</em> which might be useful:</p>
+<ul>
+<li><em>Get(Guid id):ScheduledJob</em> - retrieve <em>Scheduled Job</em> by it&#39;s ID,</li>
+<li><em>Get(string method, string typeName, string assemblyName):ScheduledJob</em> - retrieve <em>Scheduled Job</em> by method name (the name of the method called to when executing it - default name is <em>Execute</em>), type name, assembly name,</li>
+<li><em>List():IEnumerable<ScheduledJob></em> - retrieve all stored <em>Scheduled Jobs</em>,</li>
+<li><em>Save(ScheduledJob job):void</em> - store <em>ScheduledJob</em>.</li>
+</ul>
+<p><strong>NOTE</strong>: When working with <em>List</em> method, I noticed that newly added scheduled jobs might not be returned by it. When job is saved manually through UI then it is returned by <em>List</em> method.</p>
+<p>I was missing one method to get existing <em>Scheduled Job</em> by <em>Type</em>. Usually there might be only one job with particular type so it is safe to do that. I created extension method with same name as instance methods - <em>Get</em>.</p>
+<pre><code>public static class ScheduledJobRepositoryExtensions
+{
+    public static ScheduledJob Get(this ScheduledJobRepository repository, Type jobType)
+    {
+        return repository.List().Single(x =&gt; x.TypeName == jobType.FullName);
+    }
+}
+</code></pre><p><em>ScheduledJob</em> class has several properties which might be useful to create custom scheduling logic.</p>
+<ul>
+<li><em>IntervalType</em> - the type of the interval which might have values:<ul>
+<li>ScheduledIntervalType.Days</li>
+<li>ScheduledIntervalType.Hours</li>
+<li>ScheduledIntervalType.Minutes</li>
+<li>ScheduledIntervalType.Months</li>
+<li>ScheduledIntervalType.None</li>
+<li>ScheduledIntervalType.Seconds</li>
+<li>ScheduledIntervalType.Weeks</li>
+<li>ScheduledIntervalType.Years</li>
+</ul>
+</li>
+<li><em>IntervalLength</em> - the length of the interval in units defined by <em>IntervalType</em></li>
+<li><em>IsEnabled</em> - property to get or set if job is active</li>
+</ul>
+<p>Read-only properties to get job status and if it can be stopped might be useful too.</p>
+<ul>
+<li><em>IsStoppable</em> - property if job can be stopped</li>
+<li><em>IsRunning</em> - property if job currently is running</li>
+</ul>
+<p>And to take some action there are two methods.</p>
+<ul>
+<li><em>Stop()</em> - to stop the job if it is stoppable - <em>IsStoppable</em> property is <em>true</em></li>
+<li><em>ExecuteManually()</em> - to run job programmatically by skipping scheduling (I would better schedule it anyway).</li>
+</ul>
+<p>And here are few examples how it can be used. In both examples I am using <em>Injected</em> class to get <em>ScheduledJobRepository</em> instance injected in the property (<em>Scheduled Jobs</em> do not support constructor injection). In first example I am using my extension method to get <em>Scheduled Job</em> by it&#39;s type. First example schedules another <em>Scheduled Job</em> to run after 10 seconds and second example schedules itself to run after 10 seconds. In second example I am getting <em>Scheduled Job</em> by it&#39;s ID which is instance&#39;s property - <em>ScheduledJobId</em>.</p>
+<pre><code>[ScheduledPlugIn(DisplayName = &quot;I shedule other job&quot;, SortIndex = 1000)]
+public class OtherJobScheduling : JobBase
+{
+    public Injected&lt;ScheduledJobRepository&gt; ScheduledJobRepository { get; set; }
+
+    public override string Execute()
+    {
+        var repository = ScheduledJobRepository.Service;
+        var job = repository.Get(typeof(SelfScheduling));
+        job.IsEnabled = true;
+        job.NextExecution = DateTime.Now.AddSeconds(10);
+        repository.Save(job);
+
+        return &quot;Scheduling completed.&quot;;
+    }
+}
+
+[ScheduledPlugIn(DisplayName = &quot;I shedule myself&quot;, SortIndex = 1010)]
+public class SelfScheduling : JobBase
+{
+    public Injected&lt;ScheduledJobRepository&gt; ScheduledJobRepository { get; set; }
+
+    public override string Execute()
+    {
+        var repository = ScheduledJobRepository.Service;
+        var job = repository.Get(ScheduledJobId);
+        job.IsEnabled = true;
+        job.NextExecution = DateTime.Now.AddSeconds(10);
+        repository.Save(job);
+
+        return &quot;Scheduling completed.&quot;;
+    }
+}
+</code></pre><p>Working with <em>Scheduled Jobs</em> programmatically is simple while not well documented. Hope that this post will be good reference.</p>
+<p>Documentation about how to create <em>Scheduled Jobs</em> can be found on <a href="http://world.episerver.com/documentation/Items/Developers-Guide/EPiServer-CMS/8/Scheduled-jobs/Scheduled-jobs/">EPiServer World</a>.</p>
+</article><div id="disqus_thread"></div><script>/* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+var disqus_shortname = 'marisksblog'; // required: replace example with your forum shortname
+
+/* * * DON'T EDIT BELOW THIS LINE * * */
+(function() {
+  var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+  dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+  (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();</script><noscript>Please enable JavaScript to view the<a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a><a href="http://disqus.com" class="dsq-brlink">comments powered by<span class="logo-disqus">Disqus</span></a></noscript></div><div class="col-sm-1"><aside class="archive"><ul class="nav"><li><a href="/">2021</a></li><li><a href="/2020/">2020</a></li><li><a href="/2019/">2019</a></li><li><a href="/2018/">2018</a></li><li><a href="/2017/">2017</a></li><li><a href="/2016/">2016</a></li><li class="active"><a href="/2015/">2015</a></li><li><a href="/2014/">2014</a></li><li><a href="/2013/">2013</a></li><li><a href="/2012/">2012</a></li></ul></aside></div><div class="col-sm-3"><aside class="panel panel-default"><div class="panel-body"><div class="about"><img src="/img/common/profile_0021.jpg" alt="profile picture" class="center-block img-responsive thumbnail"><p>Hi! I'm Māris Krivtežs. I am Web developer primarily working with ASP.NET, EPiServer and front-end development at&nbsp;<a href="http://geta.no" target="_blank">Geta</a>, but same time learning different programming languages, learning new programming paradigms, architectures, and design. I spend my free time with my family, reading books, bicycling and traveling.</p></div><ul class="social"><li><a href="http://stackoverflow.com/users/660154/marisks" target="_blank"><i class="fa fa-stack-overflow"></i></a></li><li><a href="https://github.com/marisks" target="_blank"><i class="fa fa-github-alt"></i></a></li><li><a href="https://twitter.com/pioners1001" target="_blank"><i class="fa fa-twitter"></i></a></li><li><a href="http://www.linkedin.com/pub/maris-krivtezs/31/98b/b53" target="_blank"><i class="fa fa-linkedin"></i></a></li><li><a href="/rss.xml" target="_blank"><i class="fa fa-rss"></i></a></li></ul><a href="https://getadigital.com" target="_blank"><img src="/img/common/ident-geta-wordmark.svg" alt="Geta logo" class="center-block img-responsive aside-logo"></a></div></aside></div></div></div></div><div id="footer"><div class="container"><div class="container credit">Copyright &copy; 2017 Maris Krivtezs. All Rights Reserved, except for the parts enumerated below:<ul class="licence-list"><li>- The source code examples on this blog are covered by&nbsp;<a href="https://opensource.org/licenses/mit-license.php">MIT License</a>.</li><li>- This page content, excluding the visual design and the logotype, is covered by&nbsp;<a href="http://creativecommons.org/licenses/by/4.0/">Creative Commons Attribution 4.0 International License</a>.</li></ul></div></div></div><script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><script>window.jQuery || document.write('<script src="/js/vendor/jquery-1.10.2.min.js"><\/script>')</script><script  src="/bower_components/bootstrap/dist/js/bootstrap.min.js"></script><script  src="/js/plugins.js"></script><script  src="/js/main.js"></script></body>

@@ -1,0 +1,85 @@
+<!DOCTYPE html><!--if lt IE 8html.no-js.lt-ie9.lt-ie8(lang="en")--><!--if IE 8html.no-js.lt-ie9(lang="en")--><!--if gt IE 8html.no-js(lang="en")--><head><meta charset="utf-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><title>Episerver Dependency Injection status | marisks # code</title><meta name="description" content="Episerver just released a new version which added a constructor injection support in scheduled jobs. It encouraged me to create a list of different Episerver infrastructure parts which still do not support a constructor injection."><meta name="keywords" content=".NET, ASP.NET, C#, JavaScript, Optimizely, EPiServer, programming languages"><meta name="viewport" content="width=device-width, initial-scale=1"><!--Place favicon.ico and apple-touch-icon.png in the root directory--><meta name="generator" content="DocPad v6.79.4" /><!-- Google Tag Manager--><script async src="https://www.googletagmanager.com/gtag/js?id=G-540M01NJGH"></script><script>window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-540M01NJGH');</script><!-- End Google Tag Manager--><link rel="icon" sizes="16x16 32x32" href="/favicon.ico?v=1"><link  rel="stylesheet" href="/css/vendor/normalize.css" /><link  rel="stylesheet" href="/css/vendor/main.css" /><link  rel="stylesheet" href="/css/vendor/bootstrap.min.css" /><link  rel="stylesheet" href="//netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css" /><link  rel="stylesheet" href="/css/style.css" /><script src="/js/vendor/modernizr-2.6.2.min.js"></script></head><body><!-- Google Tag Manager--><noscript><iframe src="//www.googletagmanager.com/ns.html?id=GTM-WDKMR7" height="0" width="0" style="display: none; visibility: hidden;"></iframe></noscript><!-- End Google Tag Manager--><!--if lt IE 8p.browsehappy
+    |You are using an
+    strong
+        |outdated browser
+    |. Please
+    a(href="http://browsehappy.com/")
+        |upgrade your browser
+    |to improve your experience.
+--><div id="wrap"><div role="navigation" class="navbar navbar-ornament navbar-fixed-top"><div class="container"><div class="navbar-header"><a href="/" class="navbar-brand">marisks # code</a></div></div></div><div class="container"><div class="row"><div class="col-sm-8"><article><header><h1>Episerver Dependency Injection status</h1><p class="meta"><time datetime="2017-01-09T00:00:00.000Z">Mon Jan 09 2017</time></p></header><div class="lead">Episerver just released a new version which added a constructor injection support in scheduled jobs. It encouraged me to create a list of different Episerver infrastructure parts which still do not support a constructor injection.</div><p>Initially, I was thinking just to look at the <em>Episerver</em> documentation and find which parts of the infrastructure might not have constructor injection working. But <a href="http://blog.tech-fellow.net/">Valdis Iljučonoks</a> suggested to look up for <em>Activator.CreateInstance</em> usages in the <em>Episerver</em> code.</p>
+<p>So I used <a href="http://www.red-gate.com/products/dotnet-development/reflector/">Reflector</a> to search for <em>Activator.CreateInstance</em> usages. It has several overloads but only these five are used by the <em>Episerver</em>:</p>
+<p><img src="/img/2017-01/activator-createinstance-usages.png" class="img-responsive" alt="Activator.CreateInstance methods used in Episerver"></p>
+<p>But while there are only five methods in use, there is quite a lof of usages. For example, <em>Activator.CreateInstance&lt;T&gt;</em> is used 21 times.</p>
+<p><img src="/img/2017-01/activator-createinstance-of-T-usages.png" class="img-responsive" alt="Usages of Activator.CreateInstance of T"></p>
+<p>I understand that there are cases when <em>Activator.CreateInstance</em> should be used instead of resolving type instance with <em>IoC Container</em>. As an <em>Episerver</em> developer, I care more about extension points in the framework. So the list will be based on my knowledge of the most used services and an analysis of the <em>Activator.CreateInstance</em> method usages.</p>
+<h1 id="cms">CMS</h1>
+<p><em>CMS</em> always had a constructor injection support for controllers and now it also supports a constructor injection in <a href="http://blog.tech-fellow.net/2016/12/28/scheduled-jobs-updates/">scheduled jobs</a>. But there are still some parts which do not support a constructor injection.</p>
+<h2 id="aspnetidentity-s-iuiuser">AspNetIdentity&#39;s IUIUser</h2>
+<p>It was surprising to me that <em>ApplicationUserProvider</em> in the <em>EPiServer.Cms.UI.AspNetIdentity</em> namespace uses <em>Activator</em> for user creation. It means that you will not be able to use constructor injection when creating your own type of user. Here you can see how it is used:</p>
+<pre><code>public override IUIUser CreateUser(string username, string password, string email, string passwordQuestion, string passwordAnswer, bool isApproved, out UIUserCreateStatus status, out IEnumerable&lt;string&gt; errors)
+{
+    errors = Enumerable.Empty&lt;string&gt;();
+    status = UIUserCreateStatus.Success;
+    TUser local1 = Activator.CreateInstance&lt;TUser&gt;();
+    local1.set_Email(email);
+    local1.IsApproved = isApproved;
+    TUser user = local1;
+    user.set_UserName(username);
+    IdentityResult result = this._userManager().Create&lt;TUser, string&gt;(user, password);
+    if (!result.Succeeded)
+    {
+        errors = result.Errors;
+        status = UIUserCreateStatus.ProviderError;
+        return null;
+    }
+    return user;
+}
+</code></pre><p>Luckily, you can implement your own user provider by inheriting from <em>ApplicationUserProvider</em> and overriding this <em>CreateUser</em> method. But I would better see some user factory which could have a default implementation with <em>Activator</em> usage. Then developers would be able to create their own implementations of this factory  if needed.</p>
+<h2 id="icriterionmodel-in-visitor-groups">ICriterionModel in visitor groups</h2>
+<p><em>ICriterionModel</em> is initialized with <em>Activator</em> in the <em>EPiServer.Personalization.VisitorGroups.CriterionBase</em> class&#39;s <em>Initialize</em> method. But same as in <em>IUIUser</em> case, it is possible to override <em>Initialize</em> method in your own criterion model implementation.</p>
+<h2 id="icriterion-in-visitor-groups">ICriterion in visitor groups</h2>
+<p>Same as with <em>ICriterionModel</em>, it does not support constructor injection. <em>EPiServer.Personalization.VisitorGroups.VisitorGroupRole</em> class&#39;s <em>CreateCriterion</em> method uses <em>Activator</em> to instantiate <em>ICriterion</em>. But it is not possible to override <em>CreateCriterion</em> method as it is private.</p>
+<h2 id="iselectionfactory-in-visitor-groups">ISelectionFactory in visitor groups</h2>
+<p><em>ISelectionFactory</em> is used when creating <em>Dojo</em> dropdown list in the administrative interface. Custom implementations of such selection factory do not support constructor injection. <em>ISelectionFactory</em> is instantiated with <em>Activator</em> in the <em>EPiServer.Personalization.VisitorGroups.DojoHtmlExtensions</em> class&#39;s <em>DojoDropDownFor</em> method.</p>
+<h2 id="igeneratesadministrativeinterface-in-visitor-groups">IGeneratesAdministrativeInterface in visitor groups</h2>
+<p>Some might be interested into extending visitor group administrative interface through <em>IGeneratesAdministrativeInterface</em>. Unfortunately, it is created with <em>Activator</em> in the <em>EPiServer.Cms.Shell.UI.Controllers.Internal.VisitorGroupsController</em>. Two controller actions - <em>CriteriaModelDefinition</em> and <em>CriteriaUI</em> initializes it with <em>Activator</em> and there is no way to override this behavior. <em>EPiServer.Web.Mvc.VisitorGroups.VisitorGroupModelBinder</em> class&#39;s <em>ConvertDictionaryToObject</em> method also uses <em>Activator</em> to initialize <em>IGeneratesAdministrativeInterface</em>.</p>
+<h2 id="iviewtemplatemodelregistrator">IViewTemplateModelRegistrator</h2>
+<p> Sometimes there is a need to register different templates for different content types. Then a custom implementation of <em>IViewTemplateModelRegistrator</em> helps to achieve it. But unfortunately, instances of it are created with <em>Activator</em> in the <em>EPiServer.DataAbstraction.RuntimeModel.Internal.ViewRegistrator</em> class&#39;s <em>InstantiateViewTemplateRegisters</em> method. As this method is private, it is not possible to override the behavior. The only way to fix this is own implementation of <em>IViewRegistrator</em>.</p>
+<h1 id="commerce">Commerce</h1>
+<p>As <em>Commerce</em> is built on top of the <em>CMS</em>, anything which supports a constructor injection in <em>CMS</em> supports it also in <em>Commerce</em>. For example, controllers support a constructor injection. But Commerce has an additional infrastructure which might not support a constructor injection.</p>
+<h2 id="ipaymentplugin">IPaymentPlugin</h2>
+<p>Unfortunately, payment gateways by default do not support constructor injection. <em>IPaymentPlugin</em> is instantiated with <em>Activator</em> in the <em>EPiServer.Commerce.Order.DefaultPaymentProcessor</em> class&#39;s <em>CreatePaymentGatewayProvider</em> private method. While it is possible to create an own implementation of payment processor by implementing <em>IPaymentProcessor</em>, it is not possible to reuse logic of the <em>DefaultPaymentProcessor</em> as <em>CreatePaymentGatewayProvider</em> method is private.</p>
+<h2 id="payment">Payment</h2>
+<p>Custom <em>Payment</em> implementations also do not support constructor injection. There are few places where <em>Payment</em> is instantiated with <em>Activator</em>:</p>
+<ul>
+<li><em>Mediachase.Commerce.Orders.PaymentCollection</em> class&#39;s method <em>AddNew</em></li>
+<li><em>Mediachase.Commerce.Orders.PaymentConverter</em> class&#39;s method <em>Create</em></li>
+</ul>
+<h2 id="ipaymentgateway">IPaymentGateway</h2>
+<p>Also, <em>IPaymentGateway</em> is instantiated with <em>Activator</em> in the <em>Mediachase.Commerce.Workflow.Activities.Cart.ProcessPaymentActivity</em> class&#39;s <em>ProcessPayment</em> method.</p>
+<h2 id="ishippinggateway">IShippingGateway</h2>
+<p><em>IShippingGateway</em> is instantiated with <em>Activator</em> in the <em>Mediachase.Commerce.Workflow.Activities.ProcessShipmentsActivity</em> class&#39;s <em>ProcessShipments</em> method. It is interesting that <em>IMarketService</em> in the same method is resolved with service locator:</p>
+<pre><code>IMarket market = ServiceLocator.Current
+  .GetInstance&lt;IMarketService&gt;()
+  .GetMarket(orderGroup.MarketId);
+IShippingGateway gateway = (market != null)
+  ? ((IShippingGateway) Activator.CreateInstance(type, new object[] { market }))
+  : ((IShippingGateway) Activator.CreateInstance(type));
+</code></pre><h2 id="ishippingplugin">IShippingPlugin</h2>
+<p><em>EPiServer.Commerce.Order.Calculator.DefaultShippingCalculator</em> class&#39;s <em>GetShippingGateway</em> method uses <em>Activator</em> to instantiate <em>IShippingPlugin</em>.
+<em>GetShippingGateway</em> method is private. So to override the behavior, a custom implementation of <em>IShippingCalculator</em> is required.</p>
+<h1 id="summary">Summary</h1>
+<p>When I started to write this article, I thought that there will be a lot of places where dependency injection is not supported with a constructor injection. But it seems that <em>Episerver</em> did a great job to make it more extensible.</p>
+<p>There are still some areas which require improvements - visitor groups in <em>CMS</em>, payments, shipping in <em>Commerce</em> and other.</p>
+</article><div id="disqus_thread"></div><script>/* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+var disqus_shortname = 'marisksblog'; // required: replace example with your forum shortname
+
+/* * * DON'T EDIT BELOW THIS LINE * * */
+(function() {
+  var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+  dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+  (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();</script><noscript>Please enable JavaScript to view the<a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a><a href="http://disqus.com" class="dsq-brlink">comments powered by<span class="logo-disqus">Disqus</span></a></noscript></div><div class="col-sm-1"><aside class="archive"><ul class="nav"><li><a href="/">2021</a></li><li><a href="/2020/">2020</a></li><li><a href="/2019/">2019</a></li><li><a href="/2018/">2018</a></li><li class="active"><a href="/2017/">2017</a></li><li><a href="/2016/">2016</a></li><li><a href="/2015/">2015</a></li><li><a href="/2014/">2014</a></li><li><a href="/2013/">2013</a></li><li><a href="/2012/">2012</a></li></ul></aside></div><div class="col-sm-3"><aside class="panel panel-default"><div class="panel-body"><div class="about"><img src="/img/common/profile_0021.jpg" alt="profile picture" class="center-block img-responsive thumbnail"><p>Hi! I'm Māris Krivtežs. I am Web developer primarily working with ASP.NET, EPiServer and front-end development at&nbsp;<a href="http://geta.no" target="_blank">Geta</a>, but same time learning different programming languages, learning new programming paradigms, architectures, and design. I spend my free time with my family, reading books, bicycling and traveling.</p></div><ul class="social"><li><a href="http://stackoverflow.com/users/660154/marisks" target="_blank"><i class="fa fa-stack-overflow"></i></a></li><li><a href="https://github.com/marisks" target="_blank"><i class="fa fa-github-alt"></i></a></li><li><a href="https://twitter.com/pioners1001" target="_blank"><i class="fa fa-twitter"></i></a></li><li><a href="http://www.linkedin.com/pub/maris-krivtezs/31/98b/b53" target="_blank"><i class="fa fa-linkedin"></i></a></li><li><a href="/rss.xml" target="_blank"><i class="fa fa-rss"></i></a></li></ul><a href="https://getadigital.com" target="_blank"><img src="/img/common/ident-geta-wordmark.svg" alt="Geta logo" class="center-block img-responsive aside-logo"></a></div></aside></div></div></div></div><div id="footer"><div class="container"><div class="container credit">Copyright &copy; 2017 Maris Krivtezs. All Rights Reserved, except for the parts enumerated below:<ul class="licence-list"><li>- The source code examples on this blog are covered by&nbsp;<a href="https://opensource.org/licenses/mit-license.php">MIT License</a>.</li><li>- This page content, excluding the visual design and the logotype, is covered by&nbsp;<a href="http://creativecommons.org/licenses/by/4.0/">Creative Commons Attribution 4.0 International License</a>.</li></ul></div></div></div><script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><script>window.jQuery || document.write('<script src="/js/vendor/jquery-1.10.2.min.js"><\/script>')</script><script  src="/bower_components/bootstrap/dist/js/bootstrap.min.js"></script><script  src="/js/plugins.js"></script><script  src="/js/main.js"></script></body>

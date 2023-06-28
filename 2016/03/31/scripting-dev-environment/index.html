@@ -1,0 +1,92 @@
+<!DOCTYPE html><!--if lt IE 8html.no-js.lt-ie9.lt-ie8(lang="en")--><!--if IE 8html.no-js.lt-ie9(lang="en")--><!--if gt IE 8html.no-js(lang="en")--><head><meta charset="utf-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><title>Scripting development environment | marisks # code</title><meta name="description" content="Recently, I installed and configured my new development computer. Manual application installation and configuration take a lot of time. In the Linux (Ubuntu) world you can use apt-get to script application installation, but for configuration can backup dotfiles on the old machine and restore on the new. Luckily there are some tools which will help you do same on Windows."><meta name="keywords" content=".NET, ASP.NET, C#, JavaScript, Optimizely, EPiServer, programming languages"><meta name="viewport" content="width=device-width, initial-scale=1"><!--Place favicon.ico and apple-touch-icon.png in the root directory--><meta name="generator" content="DocPad v6.79.4" /><!-- Google Tag Manager--><script async src="https://www.googletagmanager.com/gtag/js?id=G-540M01NJGH"></script><script>window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-540M01NJGH');</script><!-- End Google Tag Manager--><link rel="icon" sizes="16x16 32x32" href="/favicon.ico?v=1"><link  rel="stylesheet" href="/css/vendor/normalize.css" /><link  rel="stylesheet" href="/css/vendor/main.css" /><link  rel="stylesheet" href="/css/vendor/bootstrap.min.css" /><link  rel="stylesheet" href="//netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css" /><link  rel="stylesheet" href="/css/style.css" /><script src="/js/vendor/modernizr-2.6.2.min.js"></script></head><body><!-- Google Tag Manager--><noscript><iframe src="//www.googletagmanager.com/ns.html?id=GTM-WDKMR7" height="0" width="0" style="display: none; visibility: hidden;"></iframe></noscript><!-- End Google Tag Manager--><!--if lt IE 8p.browsehappy
+    |You are using an
+    strong
+        |outdated browser
+    |. Please
+    a(href="http://browsehappy.com/")
+        |upgrade your browser
+    |to improve your experience.
+--><div id="wrap"><div role="navigation" class="navbar navbar-ornament navbar-fixed-top"><div class="container"><div class="navbar-header"><a href="/" class="navbar-brand">marisks # code</a></div></div></div><div class="container"><div class="row"><div class="col-sm-8"><article><header><h1>Scripting development environment</h1><p class="meta"><time datetime="2016-03-31T00:00:00.000Z">Thu Mar 31 2016</time></p></header><div class="lead">Recently, I installed and configured my new development computer. Manual application installation and configuration take a lot of time. In the Linux (Ubuntu) world you can use apt-get to script application installation, but for configuration can backup dotfiles on the old machine and restore on the new. Luckily there are some tools which will help you do same on Windows.</div><h1 id="install-applications-with-chocolatey">Install applications with Chocolatey</h1>
+<p>For application installation, you can use <a href="https://chocolatey.org/">Chocolatey</a>. It is a tool like <em>apt-get</em> on <em>Linux (Ubuntu)</em> and has lot of different applications which are used for developers. For example, <em>Notepad++</em>, <em>Atom</em>, <em>GitHub for Desktop</em> etc.</p>
+<p>First, install Chocolatey. I have created separate <em>Powershell</em> script file for it - <em>installChocolatey.ps1</em>:</p>
+<pre><code>iex ((new-object net.webclient).DownloadString(&#39;https://chocolatey.org/install.ps1&#39;))
+</code></pre><p>Then I created a <em>backup.ps1</em> script to create a list of applications I already installed. It creates the list as a <em>Powershell</em> script which can be used to restore applications. <em>backup.ps1</em> lists all installed applications, parses the output, creates <em>Chocolatey</em> install command for each application and outputs everything into <em>restore.ps1</em> file:</p>
+<pre><code>choco list -l -r | foreach { &quot;choco install &quot; + ($_).Split(&quot;|&quot;)[0] } &gt; restore.ps1
+</code></pre><p>Generated <em>restore.ps1</em> for all my applications looks like this:</p>
+<pre><code>choco install 7zip
+choco install 7zip.install
+choco install Atom
+choco install autohotkey.portable
+choco install cdex
+choco install chocolatey
+choco install ConEmu
+choco install DotNet4.5
+choco install fiddler
+choco install filezilla
+choco install github
+choco install grepwin
+choco install imagemagick
+choco install imagemagick.app
+choco install irfanview
+choco install kdiff3
+choco install libreoffice
+choco install nodejs
+choco install nodejs.install
+choco install notepadplusplus
+choco install notepadplusplus.install
+choco install NuGet.CommandLine
+choco install paint.net
+choco install pdf24
+choco install ReSharper
+choco install resharper-platform
+choco install sumatrapdf
+choco install sumatrapdf.commandline
+choco install sumatrapdf.install
+choco install synkron
+choco install terminals
+choco install vcredist2010
+choco install vim
+choco install vlc
+</code></pre><p>Now I can use <em>restore.ps1</em> on my new computer to install all the packages. Note that this script prompts for running scripts for each application to install. If you want to skip it, generate <em>choco install</em> command with &quot;-y&quot; parameter.</p>
+<h1 id="configure-iis-using-powershell-and-chocolatey">Configure IIS using Powershell and Chocolatey</h1>
+<p>For <a href="http://world.episerver.com">EPiServer</a> development, I use full <em>IIS</em> instead of <em>IIS Express</em>, but it requires proper configuration. It is hard to remember what settings and what features are required when setting it up. So it is better to use <em>Powershell</em> script for it:</p>
+<pre><code>Enable-WindowsOptionalFeature -Online -FeatureName IIS-WebServerRole
+Enable-WindowsOptionalFeature -Online -FeatureName IIS-HttpCompressionDynamic
+Enable-WindowsOptionalFeature -Online -FeatureName IIS-HttpCompressionStatic
+Enable-WindowsOptionalFeature -Online -FeatureName IIS-HttpRedirect
+Enable-WindowsOptionalFeature -Online -FeatureName IIS-HttpTracing
+Enable-WindowsOptionalFeature -Online -FeatureName IIS-BasicAuthentication
+Enable-WindowsOptionalFeature -Online -FeatureName IIS-WindowsAuthentication
+Enable-WindowsOptionalFeature -Online -FeatureName IIS-DigestAuthentication
+Enable-WindowsOptionalFeature -Online -FeatureName IIS-ClientCertificateMappingAuthentication
+Enable-WindowsOptionalFeature -Online -FeatureName IIS-IISCertificateMappingAuthentication
+Enable-WindowsOptionalFeature -Online -FeatureName IIS-WebSockets
+Enable-WindowsOptionalFeature -Online -FeatureName IIS-ASPNET -All
+Enable-WindowsOptionalFeature -Online -FeatureName IIS-ASPNET45 -All
+
+# requires chocolatey to be installed first
+choco install webpi
+</code></pre><p>The last command installs <em>Web Platform Installer (WebPI)</em>. I need it for one feature - <em>Url Rewriter</em>. Unfortunately, <em>Url Rewriter</em> has to be installed manually using <em>WebPI</em>. A future version of <em>Chocolatey</em> will be able to install <em>WebPI</em> features too.</p>
+<h1 id="backup-restore-of-git-configuration">Backup/restore of Git configuration</h1>
+<p>Another configuration I want to backup is <em>.gitconfig</em>. On <em>Windows</em> it is usually stored in <em>C:\Users\MyUsername</em>. To backup <em>.gitconfig</em>, just use <em>Copy-Item</em> <em>Powershell</em>:</p>
+<pre><code>Copy-Item C:\Users\MyUsername\.gitconfig $PSScriptRoot
+</code></pre><p>It will copy <em>.gitconfig</em> into the same folder where the script is located.</p>
+<p>Use the same <em>Copy-Item</em> to restore it:</p>
+<pre><code>Copy-Item $PSScriptRoot\.gitconfig C:\Users\MyUsername
+</code></pre><p>Same way it is possible to backup and restore any configuration file.</p>
+<h1 id="where-to-store-scripts-and-configuration-">Where to store scripts and configuration?</h1>
+<p>I am using <em>OneDrive</em> to store all my scripts and backed up configuration. It is available in <em>Windows</em> after installation and automatically syncs between all my computers. All scripts are available when <em>Windows</em> installation is done.</p>
+<h1 id="summary">Summary</h1>
+<p>While a lot of applications can be installed using <em>Chocolatey</em>, there are a lot of applications which still are not available. Also, I won&#39;t install <em>Visual Studio</em> and <em>SQL Server</em> using <em>Chocolatey</em> unless I could provide my configuration in a script.</p>
+</article><div id="disqus_thread"></div><script>/* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+var disqus_shortname = 'marisksblog'; // required: replace example with your forum shortname
+
+/* * * DON'T EDIT BELOW THIS LINE * * */
+(function() {
+  var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+  dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+  (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();</script><noscript>Please enable JavaScript to view the<a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a><a href="http://disqus.com" class="dsq-brlink">comments powered by<span class="logo-disqus">Disqus</span></a></noscript></div><div class="col-sm-1"><aside class="archive"><ul class="nav"><li><a href="/">2021</a></li><li><a href="/2020/">2020</a></li><li><a href="/2019/">2019</a></li><li><a href="/2018/">2018</a></li><li><a href="/2017/">2017</a></li><li class="active"><a href="/2016/">2016</a></li><li><a href="/2015/">2015</a></li><li><a href="/2014/">2014</a></li><li><a href="/2013/">2013</a></li><li><a href="/2012/">2012</a></li></ul></aside></div><div class="col-sm-3"><aside class="panel panel-default"><div class="panel-body"><div class="about"><img src="/img/common/profile_0021.jpg" alt="profile picture" class="center-block img-responsive thumbnail"><p>Hi! I'm Māris Krivtežs. I am Web developer primarily working with ASP.NET, EPiServer and front-end development at&nbsp;<a href="http://geta.no" target="_blank">Geta</a>, but same time learning different programming languages, learning new programming paradigms, architectures, and design. I spend my free time with my family, reading books, bicycling and traveling.</p></div><ul class="social"><li><a href="http://stackoverflow.com/users/660154/marisks" target="_blank"><i class="fa fa-stack-overflow"></i></a></li><li><a href="https://github.com/marisks" target="_blank"><i class="fa fa-github-alt"></i></a></li><li><a href="https://twitter.com/pioners1001" target="_blank"><i class="fa fa-twitter"></i></a></li><li><a href="http://www.linkedin.com/pub/maris-krivtezs/31/98b/b53" target="_blank"><i class="fa fa-linkedin"></i></a></li><li><a href="/rss.xml" target="_blank"><i class="fa fa-rss"></i></a></li></ul><a href="https://getadigital.com" target="_blank"><img src="/img/common/ident-geta-wordmark.svg" alt="Geta logo" class="center-block img-responsive aside-logo"></a></div></aside></div></div></div></div><div id="footer"><div class="container"><div class="container credit">Copyright &copy; 2017 Maris Krivtezs. All Rights Reserved, except for the parts enumerated below:<ul class="licence-list"><li>- The source code examples on this blog are covered by&nbsp;<a href="https://opensource.org/licenses/mit-license.php">MIT License</a>.</li><li>- This page content, excluding the visual design and the logotype, is covered by&nbsp;<a href="http://creativecommons.org/licenses/by/4.0/">Creative Commons Attribution 4.0 International License</a>.</li></ul></div></div></div><script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><script>window.jQuery || document.write('<script src="/js/vendor/jquery-1.10.2.min.js"><\/script>')</script><script  src="/bower_components/bootstrap/dist/js/bootstrap.min.js"></script><script  src="/js/plugins.js"></script><script  src="/js/main.js"></script></body>

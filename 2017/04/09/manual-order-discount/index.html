@@ -1,0 +1,223 @@
+<!DOCTYPE html><!--if lt IE 8html.no-js.lt-ie9.lt-ie8(lang="en")--><!--if IE 8html.no-js.lt-ie9(lang="en")--><!--if gt IE 8html.no-js(lang="en")--><head><meta charset="utf-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><title>Manual order discount | marisks # code</title><meta name="description" content="Last week I had a requirement to implement a manual order discount which can be set on any cart by the administrator/editor. I found that there is a manual discount for line items in the Commerce Manager and found how to use those in my code. When I tried to implement it the same way for the order discount, then it didn't work. The order discount requires a different approach which is described in this article."><meta name="keywords" content=".NET, ASP.NET, C#, JavaScript, Optimizely, EPiServer, programming languages"><meta name="viewport" content="width=device-width, initial-scale=1"><!--Place favicon.ico and apple-touch-icon.png in the root directory--><meta name="generator" content="DocPad v6.79.4" /><!-- Google Tag Manager--><script async src="https://www.googletagmanager.com/gtag/js?id=G-540M01NJGH"></script><script>window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-540M01NJGH');</script><!-- End Google Tag Manager--><link rel="icon" sizes="16x16 32x32" href="/favicon.ico?v=1"><link  rel="stylesheet" href="/css/vendor/normalize.css" /><link  rel="stylesheet" href="/css/vendor/main.css" /><link  rel="stylesheet" href="/css/vendor/bootstrap.min.css" /><link  rel="stylesheet" href="//netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css" /><link  rel="stylesheet" href="/css/style.css" /><script src="/js/vendor/modernizr-2.6.2.min.js"></script></head><body><!-- Google Tag Manager--><noscript><iframe src="//www.googletagmanager.com/ns.html?id=GTM-WDKMR7" height="0" width="0" style="display: none; visibility: hidden;"></iframe></noscript><!-- End Google Tag Manager--><!--if lt IE 8p.browsehappy
+    |You are using an
+    strong
+        |outdated browser
+    |. Please
+    a(href="http://browsehappy.com/")
+        |upgrade your browser
+    |to improve your experience.
+--><div id="wrap"><div role="navigation" class="navbar navbar-ornament navbar-fixed-top"><div class="container"><div class="navbar-header"><a href="/" class="navbar-brand">marisks # code</a></div></div></div><div class="container"><div class="row"><div class="col-sm-8"><article><header><h1>Manual order discount</h1><p class="meta"><time datetime="2017-04-09T00:00:00.000Z">Sun Apr 09 2017</time></p></header><div class="lead"><p>Last week I had a requirement to implement a manual order discount which can be set on any cart by the administrator/editor. I found that there is a manual discount for line items in the Commerce Manager and found how to use those in my code. When I tried to implement it the same way for the order discount, then <a href="http://world.episerver.com/forum/developer-forum/Episerver-Commerce/Thread-Container/2017/4/how-to-add-manual-order-promotion/">it didn&#39;t work</a>. The order discount requires a different approach which is described in this article.</p>
+
+</div><p>NOTE: If you need a manual line item discount, then look at <a href="http://world.episerver.com/forum/developer-forum/Episerver-Commerce/Thread-Container/2017/4/how-to-add-manual-order-promotion/">this forum thread</a>.</p>
+<p>An administrator or editor should be able to apply an order discount by amount or percentage. For this reason, you need to store a discount value and a discount type - amount or percentage somewhere. Order (including a cart) has a feature of meta-data which is the best place to add those values.</p>
+<p>The first step is the creation of the meta-field and assigning it to a cart. You also should add that meta-field to the purchase order and copy values from the cart to the purchase order on a checkout. This way you will be able to track what discount was applied.</p>
+<pre><code>[InitializableModule]
+[ModuleDependency(typeof(EPiServer.Web.InitializationModule))]
+public class Initialization : IInitializableModule
+{
+    public void Initialize(InitializationEngine context)
+    {
+        CreateMetaField(new MetaFieldInfo(Constants.ManualDiscountValueMetaField, MetaDataType.Decimal)
+        {
+            FriendlyName = &quot;Manual discount value&quot;,
+            IsNullable = true
+        });
+
+        AddFieldToMetaClass(OrderContext.Current.ShoppingCartMetaClass, GetMetaField(Constants.ManualDiscountValueMetaField));
+        AddFieldToMetaClass(OrderContext.Current.PurchaseOrderMetaClass, GetMetaField(Constants.ManualDiscountValueMetaField));
+
+        CreateMetaField(new MetaFieldInfo(Constants.ManualDiscountTypeMetaField, MetaDataType.ShortString)
+        {
+            FriendlyName = &quot;Manual discount type&quot;,
+            IsNullable = true
+        });
+
+        AddFieldToMetaClass(OrderContext.Current.ShoppingCartMetaClass, GetMetaField(Constants.ManualDiscountTypeMetaField));
+        AddFieldToMetaClass(OrderContext.Current.PurchaseOrderMetaClass, GetMetaField(Constants.ManualDiscountTypeMetaField));
+    }
+
+    public void Uninitialize(InitializationEngine context)
+    {
+    }
+
+    private void AddFieldToMetaClass(MetaClass metaClass, MetaField metaField)
+    {
+        if (metaClass.MetaFields.Any(x =&gt; x.Name == metaField.Name))
+        {
+            return;
+        }
+
+        metaClass.AddField(metaField);
+    }
+
+    private MetaField GetMetaField(string name)
+    {
+        var metaContext = OrderContext.MetaDataContext;
+        return MetaField.GetList(metaContext).FirstOrDefault(x =&gt; x.Name == name);
+    }
+
+    private void CreateMetaField(MetaFieldInfo fieldInfo)
+    {
+        var metaContext = OrderContext.MetaDataContext;
+        if (MetaField.GetList(metaContext).Any(x =&gt; x.Name == fieldInfo.Name))
+        {
+            return;
+        }
+
+        MetaField.Create(
+            metaContext,
+            fieldInfo.MetaNamespace,
+            fieldInfo.Name,
+            fieldInfo.FriendlyName,
+            fieldInfo.Description,
+            fieldInfo.MetaFieldType,
+            fieldInfo.Length,
+            fieldInfo.IsNullable,
+            fieldInfo.IsMultiLanguage,
+            fieldInfo.IsSearchable,
+            fieldInfo.IsEncrypted);
+    }
+
+    private class MetaFieldInfo
+    {
+        public MetaFieldInfo(string name, MetaDataType metaFieldType)
+        {
+            if (name == null) throw new ArgumentNullException(nameof(name));
+            Name = name;
+            MetaFieldType = metaFieldType;
+            FriendlyName = name;
+        }
+
+        public string Name { get; }
+        public string MetaNamespace { get; set; } = string.Empty;
+        public string FriendlyName { get; set; }
+        public string Description { get; set; } = string.Empty;
+        public MetaDataType MetaFieldType { get; }
+        public bool IsNullable { get; set; }
+        public int Length { get; set; }
+        public bool IsMultiLanguage { get; set; }
+        public bool IsSearchable { get; set; }
+        public bool IsEncrypted { get; set; }
+    }
+}
+</code></pre><p>Here I am using <em>MetaFieldInfo</em> private class to simplify meta-field creation by requiring to provide just basic info. Another code is pretty simple - it adds a meta field to the <em>Commerce</em> and assigns it to the meta-class.</p>
+<p>After meta-fields are created, create a user interface which allows administrators to set this discount. Then save posted values in the cart.</p>
+<pre><code>var cart = _orderRepository.LoadOrCreateCart&lt;ICart&gt;(customerId, Constants.CartName);
+cart.Properties[Constants.ManualDiscountValueMetaField] = discount;
+cart.Properties[Constants.ManualDiscountTypeMetaField] = discountType.ToString();
+cart.ApplyDiscounts(_promotionEngine, new PromotionEngineSettings());
+_orderRepository.Save(cart);
+</code></pre><p>In this example, I am loading a cart by customer <em>Id</em>, then setting meta-field values on the <em>Properties</em> property and saving the cart. But before the cart saves, you should call <em>ApplyDiscounts</em> extension method which will re-calculate all the discounts applied to the cart.</p>
+<p><em>DiscountType</em> in this example is just an <em>Enum</em> with two values - <em>Amount</em> and <em>Percent</em>.</p>
+<p>For easier access to the meta-fields, create helper extension methods.</p>
+<pre><code>public static class ExtendedPropertiesExtensions
+{
+    public static DiscountType GetManualDiscountType(this IExtendedProperties container)
+    {
+        var typeString = container.Properties[Constants.ManualDiscountTypeMetaField]?.ToString() ?? string.Empty;
+        DiscountType discountType;
+        return Enum.TryParse(typeString, true, out discountType) ? discountType : DiscountType.Amount;
+    }
+
+    public static decimal GetManualDiscount(this IExtendedProperties container)
+    {
+        return (decimal)(container.Properties[Constants.ManualDiscountValueMetaField] ?? 0.0m);
+    }
+}
+</code></pre><p>Now there is everything set up to be able to create discount processing.</p>
+<pre><code>[ContentType(
+    DisplayName = &quot;Order manual discount&quot;,
+    Description = &quot;A discount used by administrators to set on the cart order in the Cart module.&quot;,
+    GUID = &quot;AD1403E8-5545-4F5A-A52A-0A21215435CA&quot;)]
+public class ManualOrderDiscountPromotion : OrderPromotion
+{
+}
+
+public class ManualOrderDiscountPromotionProcessor : OrderPromotionProcessorBase&lt;ManualOrderDiscountPromotion&gt;
+{
+    protected override RewardDescription Evaluate(
+        ManualOrderDiscountPromotion promotionData,
+        PromotionProcessorContext context)
+    {
+        var orderForm = context.OrderForm;
+        var cart = context.OrderGroup as ICart;
+        if (cart == null)
+        {
+            return NoReward(promotionData);
+        }
+
+        var value = cart.GetManualDiscount();
+        if (value == 0)
+        {
+            return NoReward(promotionData);
+        }
+
+        switch (cart.GetManualDiscountType())
+        {
+            case DiscountType.Amount:
+                return RewardDescription.CreateMoneyReward(
+                    FulfillmentStatus.Fulfilled,
+                    new[] { CreateRedemptionDescription(orderForm) },
+                    promotionData,
+                    value,
+                    description: $&quot;{value} amount discount applied to order&quot;);
+            case DiscountType.Percent:
+                return RewardDescription.CreatePercentageReward(
+                    FulfillmentStatus.Fulfilled,
+                    new[] { CreateRedemptionDescription(orderForm) },
+                    promotionData,
+                    value,
+                    description: $&quot;{value} % discount applied to order&quot;);
+            default:
+                throw new ArgumentOutOfRangeException();
+        }
+    }
+
+    protected override bool CanBeFulfilled(
+        ManualOrderDiscountPromotion promotionData,
+        PromotionProcessorContext context)
+    {
+        var cart = context.OrderGroup as ICart;
+        if (cart == null)
+        {
+            return false;
+        }
+
+        return cart.GetManualDiscount() != 0;
+    }
+
+    private RewardDescription NoReward(PromotionData promotionData)
+    {
+        return new RewardDescription(
+                FulfillmentStatus.NotFulfilled,
+                Enumerable.Empty&lt;RedemptionDescription&gt;(),
+                promotionData,
+                unitDiscount: 0,
+                unitPercentage: 0,
+                rewardType: RewardType.None,
+                description: &quot;No discount applied&quot;);
+    }
+
+    protected override PromotionItems GetPromotionItems(ManualOrderDiscountPromotion promotionData)
+    {
+        return new PromotionItems(
+            promotionData,
+            new CatalogItemSelection(null, CatalogItemSelectionType.All, true),
+            new CatalogItemSelection(null, CatalogItemSelectionType.All, true));
+    }
+}
+</code></pre><p>First of all, define an order promotion for the manual order discount. There is no need for any meta-data - so no properties needed.</p>
+<p>Then create a promotion processor. Do not apply a promotion when an order is not a cart and when the discount value is zero. For an amount discount and a percentage discount, you should call two different methods to create a reward - <em>RewardDescription.CreateMoneyReward</em> and <em>RewardDescription.CreatePercentageReward</em>.</p>
+<p>The last step - create a special campaign and a discount with this new type in a <em>Commerce -&gt; Marketing</em> section.</p>
+</article><div id="disqus_thread"></div><script>/* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+var disqus_shortname = 'marisksblog'; // required: replace example with your forum shortname
+
+/* * * DON'T EDIT BELOW THIS LINE * * */
+(function() {
+  var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+  dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+  (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();</script><noscript>Please enable JavaScript to view the<a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a><a href="http://disqus.com" class="dsq-brlink">comments powered by<span class="logo-disqus">Disqus</span></a></noscript></div><div class="col-sm-1"><aside class="archive"><ul class="nav"><li><a href="/">2021</a></li><li><a href="/2020/">2020</a></li><li><a href="/2019/">2019</a></li><li><a href="/2018/">2018</a></li><li class="active"><a href="/2017/">2017</a></li><li><a href="/2016/">2016</a></li><li><a href="/2015/">2015</a></li><li><a href="/2014/">2014</a></li><li><a href="/2013/">2013</a></li><li><a href="/2012/">2012</a></li></ul></aside></div><div class="col-sm-3"><aside class="panel panel-default"><div class="panel-body"><div class="about"><img src="/img/common/profile_0021.jpg" alt="profile picture" class="center-block img-responsive thumbnail"><p>Hi! I'm Māris Krivtežs. I am Web developer primarily working with ASP.NET, EPiServer and front-end development at&nbsp;<a href="http://geta.no" target="_blank">Geta</a>, but same time learning different programming languages, learning new programming paradigms, architectures, and design. I spend my free time with my family, reading books, bicycling and traveling.</p></div><ul class="social"><li><a href="http://stackoverflow.com/users/660154/marisks" target="_blank"><i class="fa fa-stack-overflow"></i></a></li><li><a href="https://github.com/marisks" target="_blank"><i class="fa fa-github-alt"></i></a></li><li><a href="https://twitter.com/pioners1001" target="_blank"><i class="fa fa-twitter"></i></a></li><li><a href="http://www.linkedin.com/pub/maris-krivtezs/31/98b/b53" target="_blank"><i class="fa fa-linkedin"></i></a></li><li><a href="/rss.xml" target="_blank"><i class="fa fa-rss"></i></a></li></ul><a href="https://getadigital.com" target="_blank"><img src="/img/common/ident-geta-wordmark.svg" alt="Geta logo" class="center-block img-responsive aside-logo"></a></div></aside></div></div></div></div><div id="footer"><div class="container"><div class="container credit">Copyright &copy; 2017 Maris Krivtezs. All Rights Reserved, except for the parts enumerated below:<ul class="licence-list"><li>- The source code examples on this blog are covered by&nbsp;<a href="https://opensource.org/licenses/mit-license.php">MIT License</a>.</li><li>- This page content, excluding the visual design and the logotype, is covered by&nbsp;<a href="http://creativecommons.org/licenses/by/4.0/">Creative Commons Attribution 4.0 International License</a>.</li></ul></div></div></div><script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><script>window.jQuery || document.write('<script src="/js/vendor/jquery-1.10.2.min.js"><\/script>')</script><script  src="/bower_components/bootstrap/dist/js/bootstrap.min.js"></script><script  src="/js/plugins.js"></script><script  src="/js/main.js"></script></body>

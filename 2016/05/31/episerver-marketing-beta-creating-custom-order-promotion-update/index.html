@@ -1,0 +1,87 @@
+<!DOCTYPE html><!--if lt IE 8html.no-js.lt-ie9.lt-ie8(lang="en")--><!--if IE 8html.no-js.lt-ie9(lang="en")--><!--if gt IE 8html.no-js(lang="en")--><head><meta charset="utf-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><title>EPiServer Marketing [Beta] - creating custom order promotion (Update) | marisks # code</title><meta name="description" content="Last week I wrote an article about creating an order promotion with new EPiServer Marketing Beta. I haven't noticed the new version which came out last week and had some improvements in an API. This article describes changes in promotions for Commerce 9.16.0."><meta name="keywords" content=".NET, ASP.NET, C#, JavaScript, Optimizely, EPiServer, programming languages"><meta name="viewport" content="width=device-width, initial-scale=1"><!--Place favicon.ico and apple-touch-icon.png in the root directory--><meta name="generator" content="DocPad v6.79.4" /><!-- Google Tag Manager--><script async src="https://www.googletagmanager.com/gtag/js?id=G-540M01NJGH"></script><script>window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-540M01NJGH');</script><!-- End Google Tag Manager--><link rel="icon" sizes="16x16 32x32" href="/favicon.ico?v=1"><link  rel="stylesheet" href="/css/vendor/normalize.css" /><link  rel="stylesheet" href="/css/vendor/main.css" /><link  rel="stylesheet" href="/css/vendor/bootstrap.min.css" /><link  rel="stylesheet" href="//netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css" /><link  rel="stylesheet" href="/css/style.css" /><script src="/js/vendor/modernizr-2.6.2.min.js"></script></head><body><!-- Google Tag Manager--><noscript><iframe src="//www.googletagmanager.com/ns.html?id=GTM-WDKMR7" height="0" width="0" style="display: none; visibility: hidden;"></iframe></noscript><!-- End Google Tag Manager--><!--if lt IE 8p.browsehappy
+    |You are using an
+    strong
+        |outdated browser
+    |. Please
+    a(href="http://browsehappy.com/")
+        |upgrade your browser
+    |to improve your experience.
+--><div id="wrap"><div role="navigation" class="navbar navbar-ornament navbar-fixed-top"><div class="container"><div class="navbar-header"><a href="/" class="navbar-brand">marisks # code</a></div></div></div><div class="container"><div class="row"><div class="col-sm-8"><article><header><h1>EPiServer Marketing [Beta] - creating custom order promotion (Update)</h1><p class="meta"><time datetime="2016-05-31T00:00:00.000Z">Tue May 31 2016</time></p></header><div class="lead">Last week I wrote an article about creating an order promotion with new EPiServer Marketing [Beta]. I haven't noticed the new version which came out last week and had some improvements in an API. This article describes changes in promotions for Commerce 9.16.0.</div><p>Thanks to <a href="http://marisks.net/2016/05/24/episerver-marketing-beta-creating-custom-order-promotion/#comment-2693609996">@lunchin</a> pointing me that new Commerce version came out with improvements.</p>
+<p>So the changes. First of all, custom promotion processor should inherit proper base class:</p>
+<ul>
+<li>for <em>OrderPromotion</em> use <em>OrderPromotionProcessorBase</em>,</li>
+<li>for <em>EntryPromotion</em> use <em>EntryPromotionProcessorBase</em>,</li>
+<li>for <em>ShippingPromotion</em> use <em>ShippingPromotionProcessorBase</em>.</li>
+</ul>
+<p>Another change is that you are not able to new up new instances of <em>RedemptionDescription</em>, but instead, use base processor&#39;s method <em>CreateRedemptionDescription</em>.</p>
+<p>Here is the same promotion I showed last week but updated to the latest version:</p>
+<pre><code>[ContentType(
+    DisplayName = &quot;Additional Discount promotion&quot;,
+    GUID = &quot;E6271950-DB98-4FE6-9626-CEFCBF46BE19&quot;)]
+public class AdditionalDiscountPromoData : OrderPromotion
+{
+}
+
+public class AdditionalDiscountPromoProcessor
+    : OrderPromotionProcessorBase&lt;AdditionalDiscountPromoData&gt; // &lt;-- Inherits from specific base
+{
+    protected override RewardDescription Evaluate(
+        AdditionalDiscountPromoData promotionData,
+        PromotionProcessorContext context)
+    {
+        var orderForm = context.OrderForm;
+        var cart = context.OrderGroup as Cart;
+        if (cart == null)
+        {
+            return NoReward(promotionData);
+        }
+
+        var additionalDiscountPercent = (decimal)(cart[Constants.AdditionalDiscountPercentMetaField] ?? 0.0m);
+        if (additionalDiscountPercent == 0)
+        {
+            return NoReward(promotionData);
+        }
+
+        return RewardDescription.CreatePercentageReward(
+            FulfillmentStatus.Fulfilled,
+            new[] { CreateRedemptionDescription(orderForm) }, // &lt;-- Changed RedemptionDescription initialization
+            promotionData,
+            additionalDiscountPercent,
+            description: $&quot;{additionalDiscountPercent} % discount applied to order as set by support staff&quot;);
+    }
+
+    private RewardDescription NoReward(PromotionData promotionData)
+    {
+        return new RewardDescription(
+                FulfillmentStatus.NotFulfilled,
+                Enumerable.Empty&lt;RedemptionDescription&gt;(),
+                promotionData,
+                unitDiscount: 0,
+                unitPercentage: 0,
+                rewardType: RewardType.None,
+                description: &quot;No discount applied&quot;);
+    }
+
+    protected override PromotionItems GetPromotionItems(AdditionalDiscountPromoData promotionData)
+    {
+        return new PromotionItems(
+            promotionData,
+            new CatalogItemSelection(null, CatalogItemSelectionType.All, true),
+            new CatalogItemSelection(null, CatalogItemSelectionType.All, true));
+    }
+}
+</code></pre><h1 id="summary">Summary</h1>
+<p>New API now ensures that promotions can be built only the right way - appropriate <em>RewardDescription</em> for each promotion type.</p>
+<p>But I am not sure that the change is good from the API correctness standpoint. All base classes implement <em>IPromotionProcessor</em> interface and it&#39;s method <em>Evaluate</em> returns <em>RewardDescription</em> which requires <em>RedemptionDescription</em> in the constructor. But <em>RedemptionDescription</em> has an internal constructor and can&#39;t be created outside of <em>EPiServer&#39;s</em> base classes. Because of that, no other <em>IPromotionProcessor</em> interface implementations can be created. While it is unlikely that someone would like to create another base class for promotion processor, creating a stub implementation of it for unit tests is impossible now.</p>
+</article><div id="disqus_thread"></div><script>/* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+var disqus_shortname = 'marisksblog'; // required: replace example with your forum shortname
+
+/* * * DON'T EDIT BELOW THIS LINE * * */
+(function() {
+  var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+  dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+  (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();</script><noscript>Please enable JavaScript to view the<a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a><a href="http://disqus.com" class="dsq-brlink">comments powered by<span class="logo-disqus">Disqus</span></a></noscript></div><div class="col-sm-1"><aside class="archive"><ul class="nav"><li><a href="/">2021</a></li><li><a href="/2020/">2020</a></li><li><a href="/2019/">2019</a></li><li><a href="/2018/">2018</a></li><li><a href="/2017/">2017</a></li><li class="active"><a href="/2016/">2016</a></li><li><a href="/2015/">2015</a></li><li><a href="/2014/">2014</a></li><li><a href="/2013/">2013</a></li><li><a href="/2012/">2012</a></li></ul></aside></div><div class="col-sm-3"><aside class="panel panel-default"><div class="panel-body"><div class="about"><img src="/img/common/profile_0021.jpg" alt="profile picture" class="center-block img-responsive thumbnail"><p>Hi! I'm Māris Krivtežs. I am Web developer primarily working with ASP.NET, EPiServer and front-end development at&nbsp;<a href="http://geta.no" target="_blank">Geta</a>, but same time learning different programming languages, learning new programming paradigms, architectures, and design. I spend my free time with my family, reading books, bicycling and traveling.</p></div><ul class="social"><li><a href="http://stackoverflow.com/users/660154/marisks" target="_blank"><i class="fa fa-stack-overflow"></i></a></li><li><a href="https://github.com/marisks" target="_blank"><i class="fa fa-github-alt"></i></a></li><li><a href="https://twitter.com/pioners1001" target="_blank"><i class="fa fa-twitter"></i></a></li><li><a href="http://www.linkedin.com/pub/maris-krivtezs/31/98b/b53" target="_blank"><i class="fa fa-linkedin"></i></a></li><li><a href="/rss.xml" target="_blank"><i class="fa fa-rss"></i></a></li></ul><a href="https://getadigital.com" target="_blank"><img src="/img/common/ident-geta-wordmark.svg" alt="Geta logo" class="center-block img-responsive aside-logo"></a></div></aside></div></div></div></div><div id="footer"><div class="container"><div class="container credit">Copyright &copy; 2017 Maris Krivtezs. All Rights Reserved, except for the parts enumerated below:<ul class="licence-list"><li>- The source code examples on this blog are covered by&nbsp;<a href="https://opensource.org/licenses/mit-license.php">MIT License</a>.</li><li>- This page content, excluding the visual design and the logotype, is covered by&nbsp;<a href="http://creativecommons.org/licenses/by/4.0/">Creative Commons Attribution 4.0 International License</a>.</li></ul></div></div></div><script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><script>window.jQuery || document.write('<script src="/js/vendor/jquery-1.10.2.min.js"><\/script>')</script><script  src="/bower_components/bootstrap/dist/js/bootstrap.min.js"></script><script  src="/js/plugins.js"></script><script  src="/js/main.js"></script></body>

@@ -1,0 +1,178 @@
+<!DOCTYPE html><!--if lt IE 8html.no-js.lt-ie9.lt-ie8(lang="en")--><!--if IE 8html.no-js.lt-ie9(lang="en")--><!--if gt IE 8html.no-js(lang="en")--><head><meta charset="utf-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><title>Dependency injection in extension methods | marisks # code</title><meta name="description" content="Extension methods are a great way to extend the functionality of objects. Sometimes, when extending an object, it is required to use some service and here comes a dependency injection. Developers use different approaches how to inject dependencies into an extension method. Some are better than others but some popular ones actually are anti-patterns."><meta name="keywords" content=".NET, ASP.NET, C#, JavaScript, Optimizely, EPiServer, programming languages"><meta name="viewport" content="width=device-width, initial-scale=1"><!--Place favicon.ico and apple-touch-icon.png in the root directory--><meta name="generator" content="DocPad v6.79.4" /><!-- Google Tag Manager--><script async src="https://www.googletagmanager.com/gtag/js?id=G-540M01NJGH"></script><script>window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-540M01NJGH');</script><!-- End Google Tag Manager--><link rel="icon" sizes="16x16 32x32" href="/favicon.ico?v=1"><link  rel="stylesheet" href="/css/vendor/normalize.css" /><link  rel="stylesheet" href="/css/vendor/main.css" /><link  rel="stylesheet" href="/css/vendor/bootstrap.min.css" /><link  rel="stylesheet" href="//netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css" /><link  rel="stylesheet" href="/css/style.css" /><script src="/js/vendor/modernizr-2.6.2.min.js"></script></head><body><!-- Google Tag Manager--><noscript><iframe src="//www.googletagmanager.com/ns.html?id=GTM-WDKMR7" height="0" width="0" style="display: none; visibility: hidden;"></iframe></noscript><!-- End Google Tag Manager--><!--if lt IE 8p.browsehappy
+    |You are using an
+    strong
+        |outdated browser
+    |. Please
+    a(href="http://browsehappy.com/")
+        |upgrade your browser
+    |to improve your experience.
+--><div id="wrap"><div role="navigation" class="navbar navbar-ornament navbar-fixed-top"><div class="container"><div class="navbar-header"><a href="/" class="navbar-brand">marisks # code</a></div></div></div><div class="container"><div class="row"><div class="col-sm-8"><article><header><h1>Dependency injection in extension methods</h1><p class="meta"><time datetime="2016-12-19T00:00:00.000Z">Mon Dec 19 2016</time></p></header><div class="lead">Extension methods are a great way to extend the functionality of objects. Sometimes, when extending an object, it is required to use some service and here comes a dependency injection. Developers use different approaches how to inject dependencies into an extension method. Some are better than others but some popular ones actually are anti-patterns.</div><p>The most common dependency injection pattern - constructor injection is not available in extension methods as there is no object to construct. So there are several options left:</p>
+<ul>
+<li>method injection,</li>
+<li>service locator,</li>
+<li>property injection (kind of).</li>
+</ul>
+<p>Let&#39;s see how each of these can be used.</p>
+<h1 id="method-injection">Method injection</h1>
+<p>A method injection is the simplest option but it is not commonly used. The reason for it is that a caller of an extension method should pass the dependency into the method and it doesn&#39;t feel nice. So let&#39;s see how does it look like.</p>
+<pre><code>public static string FirstChildName(
+    this ContentReference link, IContentLoader loader)
+{
+    var item = loader.GetChildren&lt;IContent&gt;(link).FirstOrDefault();
+    return item == null ? string.Empty : item.Name;
+}
+</code></pre><p>In this example, <em>IContentLoader</em> gets injected into the <em>FirstChildName</em> extension method and used to retrieve required data. So far it looks good. But when we look at the usage of this extension method it seems &quot;ugly&quot;.</p>
+<pre><code>public class MethodUsage
+{
+    private readonly IContentLoader _contentLoader;
+
+    public MethodUsage(IContentLoader contentLoader)
+    {
+        _contentLoader = contentLoader;
+    }
+
+    public void Use(ContentReference link)
+    {
+        var name = link.FirstChildName(_contentLoader);
+
+        // Use the name here
+    }
+}
+</code></pre><p>When calling the <em>FirstChildName</em> it requires passing an <em>IContentLoader</em> too. It feels that it would be nicer if we could just call <em>FirstChildName</em> without passing in anything and then comes the desire to use service locator or property injection.</p>
+<h1 id="service-locator">Service locator</h1>
+<p>Service locator is easy to use - just retrieve your dependency from it just before its usage.</p>
+<pre><code>public static string FirstChildName(
+    this ContentReference link)
+{
+    var loader = ServiceLocator.Current.GetInstance&lt;IContentLoader&gt;();
+    var item = loader.GetChildren&lt;IContent&gt;(link).FirstOrDefault();
+    return item == null ? string.Empty : item.Name;
+}
+</code></pre><p>And now you are able to call this extension method without passing anything to it.</p>
+<pre><code>var name = link.FirstChildName();
+</code></pre><p>Looks great, no? But as we remember, <a href="http://blog.ploeh.dk/2010/02/03/ServiceLocatorisanAnti-Pattern/">service locator is an anti-pattern</a>. It hides dependencies from us and it is impossible to replace those easily. When you would need to replace an <em>IContentLoader</em> implementation in a unit test, it would be impossible. So, if service locator should not be used, maybe property injection could help.</p>
+<h1 id="property-injection">Property injection</h1>
+<p><em>EPiServer</em> gives you an option to use a static property with a wrapper - <em>Injected</em> which allows lazily load your dependency.</p>
+<pre><code>public static Injected&lt;IContentLoader&gt; Loader { get; set; }
+
+public static string FirstChildName(
+    this ContentReference link)
+{
+    var item = Loader.Service.GetChildren&lt;IContent&gt;(link).FirstOrDefault();
+    return item == null ? string.Empty : item.Name;
+}
+</code></pre><p>Now it looks better - it is possible to replace injected <em>IContentLoader</em> with stub instance in the test.</p>
+<pre><code>[Fact]
+public void Test()
+{
+    ExtensionMethods.Loader = new Injected&lt;IContentLoader&gt;(new StubContentLoader());
+
+    // Rest of the test
+}
+
+public class StubContentLoader : IContentLoader
+{
+    // Implementation
+}
+</code></pre><p>While it looks like a good solution, it has several issues. One issue is related to making <em>Injected</em> property private. Developers tend to hide <em>Injected</em> properties to outside probably because <em>Intellisense</em> displays those and developers won&#39;t see or give access to those. In this case, it has same issues as service locator - it is impossible to replace a dependency.</p>
+<p>Another issue is that it is not proper property injection. It is just hidden service locator. As there is no class to instantiate when calling extension method, no property gets set. Instead, when <em>Injected</em> wrapper sees that there is no value set, it uses a service locator to resolve a service.</p>
+<p>So property injection can be used but only when properties are public. But maybe there still is a better way? What if property injection could be used as a default service accessor and a method injection for proper dependency injection? Then we could hide a service accessor property and still inject services.</p>
+<h1 id="property-injection-method-injection">Property injection + method injection</h1>
+<p>So how does it look like? Let&#39;s create two methods - one is same as in the method injection sample and another calling it and passing in a service from a property.</p>
+<pre><code>public static string FirstChildName(
+    this ContentReference link, IContentLoader loader)
+{
+    var item = loader.GetChildren&lt;IContent&gt;(link).FirstOrDefault();
+    return item == null ? string.Empty : item.Name;
+}
+
+private static Injected&lt;IContentLoader&gt; Loader { get; set; }
+
+public static string FirstChildName(
+    this ContentReference link)
+{
+    return FirstChildName(link, Loader.Service);
+}
+</code></pre><p>I have seen this solution in multiple places and initially I did like it but it has one serious drawback. A dependency injection just doesn&#39;t work here. Yes, you have a method injection. But let&#39;s see the common usage.</p>
+<pre><code>public void Use(ContentReference link)
+{
+    var name = link.FirstChildName();
+
+    // Use the name here
+}
+</code></pre><p>There is no dependency injected. Usually, developers call these extension methods without passing the dependency. And when writing the test, it is impossible to replace it.</p>
+<pre><code>public void Test()
+{
+    // Should set stub dependency here but no way to do it
+
+    Use(link); // Call the method under test
+
+    // Rest of the test
+}
+</code></pre><p>So while the calling code is not using a version of a method with explicit dependency injection, it is impossible to replace a dependency with another implementation.</p>
+<h1 id="solution">Solution</h1>
+<p>Based on the previous, there is only one solution - a method injection. But it didn&#39;t &quot;feel&quot; right. You had to pass in the dependency in your nice extension method. For example, the usage of the previous extension method with method injection.</p>
+<pre><code>var name = ContentReference.StartPage.FirstChildName(_contentLoader);
+</code></pre><p>The issue with this &quot;feeling&quot; is that we are passing in wrong first parameter. Instead of passing the model (<em>ContentReference</em> in the example), pass in a service.</p>
+<pre><code>public static string FirstChildName(
+    this IContentLoader loader, ContentReference link)
+{
+    var item = loader.GetChildren&lt;IContent&gt;(link).FirstOrDefault();
+    return item == null ? string.Empty : item.Name;
+}
+</code></pre><p>And the usage now feels more natural. It even looks like a native service method. For example, <em>IContentLoader&#39;s</em> <em>GetChildren</em> method.</p>
+<pre><code>var name = _contentLoader.FirstChildName(ContentReference.StartPage);
+var children = _contentLoader.GetChildren&lt;IContent&gt;(ContentReference.StartPage);
+</code></pre><p>But what if I have multiple services to pass in? When working with <em>EPiServer Commerce</em> it is quite common. So let&#39;s take this example.</p>
+<pre><code>public static T GetByCode&lt;T&gt;(
+    this string code, ReferenceConverter converter, IContentLoader loader)
+    where T : CatalogContentBase
+{
+    var link = converter.GetContentLink(code);
+    return loader.Get&lt;T&gt;(link);
+}
+
+// And the usage:
+var product = &quot;ABC-123&quot;.GetByCode&lt;ProductContent&gt;(_referenceConverter, _contentLoader);
+</code></pre><p>As you see, I tried to pass in a model (in this case a product code) as the first parameter. When using it, it doesn&#39;t look right. But which one of the services I would put as a first parameter for this extension method? None.</p>
+<p>Instead, new interface and class should be created which provides required service.</p>
+<pre><code>public interface IProductLoader
+{
+    T GetByCode&lt;T&gt;(string code) where T : CatalogContentBase;
+}
+
+public class ProductLoader : IProductLoader
+{
+    private readonly ReferenceConverter _converter;
+    private readonly IContentLoader _loader;
+
+    public ProductLoader(
+        ReferenceConverter converter, IContentLoader loader)
+    {
+        _converter = converter;
+        _loader = loader;
+    }
+
+    public T GetByCode&lt;T&gt;(string code)
+        where T : CatalogContentBase
+    {
+        var link = _converter.GetContentLink(code);
+        return _loader.Get&lt;T&gt;(link);
+    }
+}
+
+// And the usage:
+var product = _productLoader.GetByCode(&quot;ABC-123&quot;);
+</code></pre><p>And make sure that your interface follows <a href="Interface segregation principle">interface segregation principle</a>.</p>
+</article><div id="disqus_thread"></div><script>/* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+var disqus_shortname = 'marisksblog'; // required: replace example with your forum shortname
+
+/* * * DON'T EDIT BELOW THIS LINE * * */
+(function() {
+  var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+  dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+  (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();</script><noscript>Please enable JavaScript to view the<a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a><a href="http://disqus.com" class="dsq-brlink">comments powered by<span class="logo-disqus">Disqus</span></a></noscript></div><div class="col-sm-1"><aside class="archive"><ul class="nav"><li><a href="/">2021</a></li><li><a href="/2020/">2020</a></li><li><a href="/2019/">2019</a></li><li><a href="/2018/">2018</a></li><li><a href="/2017/">2017</a></li><li class="active"><a href="/2016/">2016</a></li><li><a href="/2015/">2015</a></li><li><a href="/2014/">2014</a></li><li><a href="/2013/">2013</a></li><li><a href="/2012/">2012</a></li></ul></aside></div><div class="col-sm-3"><aside class="panel panel-default"><div class="panel-body"><div class="about"><img src="/img/common/profile_0021.jpg" alt="profile picture" class="center-block img-responsive thumbnail"><p>Hi! I'm Māris Krivtežs. I am Web developer primarily working with ASP.NET, EPiServer and front-end development at&nbsp;<a href="http://geta.no" target="_blank">Geta</a>, but same time learning different programming languages, learning new programming paradigms, architectures, and design. I spend my free time with my family, reading books, bicycling and traveling.</p></div><ul class="social"><li><a href="http://stackoverflow.com/users/660154/marisks" target="_blank"><i class="fa fa-stack-overflow"></i></a></li><li><a href="https://github.com/marisks" target="_blank"><i class="fa fa-github-alt"></i></a></li><li><a href="https://twitter.com/pioners1001" target="_blank"><i class="fa fa-twitter"></i></a></li><li><a href="http://www.linkedin.com/pub/maris-krivtezs/31/98b/b53" target="_blank"><i class="fa fa-linkedin"></i></a></li><li><a href="/rss.xml" target="_blank"><i class="fa fa-rss"></i></a></li></ul><a href="https://getadigital.com" target="_blank"><img src="/img/common/ident-geta-wordmark.svg" alt="Geta logo" class="center-block img-responsive aside-logo"></a></div></aside></div></div></div></div><div id="footer"><div class="container"><div class="container credit">Copyright &copy; 2017 Maris Krivtezs. All Rights Reserved, except for the parts enumerated below:<ul class="licence-list"><li>- The source code examples on this blog are covered by&nbsp;<a href="https://opensource.org/licenses/mit-license.php">MIT License</a>.</li><li>- This page content, excluding the visual design and the logotype, is covered by&nbsp;<a href="http://creativecommons.org/licenses/by/4.0/">Creative Commons Attribution 4.0 International License</a>.</li></ul></div></div></div><script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><script>window.jQuery || document.write('<script src="/js/vendor/jquery-1.10.2.min.js"><\/script>')</script><script  src="/bower_components/bootstrap/dist/js/bootstrap.min.js"></script><script  src="/js/plugins.js"></script><script  src="/js/main.js"></script></body>

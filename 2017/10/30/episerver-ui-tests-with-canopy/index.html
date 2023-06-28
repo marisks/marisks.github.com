@@ -1,0 +1,183 @@
+<!DOCTYPE html><!--if lt IE 8html.no-js.lt-ie9.lt-ie8(lang="en")--><!--if IE 8html.no-js.lt-ie9(lang="en")--><!--if gt IE 8html.no-js(lang="en")--><head><meta charset="utf-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><title>Episerver UI tests with canopy | marisks # code</title><meta name="description" content="Several months ago I wrote an article about UI testing basics in Episerver. This is more practical article how to implement these basic principles using canopy testing framework."><meta name="keywords" content=".NET, ASP.NET, C#, JavaScript, Optimizely, EPiServer, programming languages"><meta name="viewport" content="width=device-width, initial-scale=1"><!--Place favicon.ico and apple-touch-icon.png in the root directory--><meta name="generator" content="DocPad v6.79.4" /><!-- Google Tag Manager--><script async src="https://www.googletagmanager.com/gtag/js?id=G-540M01NJGH"></script><script>window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-540M01NJGH');</script><!-- End Google Tag Manager--><link rel="icon" sizes="16x16 32x32" href="/favicon.ico?v=1"><link  rel="stylesheet" href="/css/vendor/normalize.css" /><link  rel="stylesheet" href="/css/vendor/main.css" /><link  rel="stylesheet" href="/css/vendor/bootstrap.min.css" /><link  rel="stylesheet" href="//netdna.bootstrapcdn.com/font-awesome/4.0.3/css/font-awesome.css" /><link  rel="stylesheet" href="/css/style.css" /><script src="/js/vendor/modernizr-2.6.2.min.js"></script></head><body><!-- Google Tag Manager--><noscript><iframe src="//www.googletagmanager.com/ns.html?id=GTM-WDKMR7" height="0" width="0" style="display: none; visibility: hidden;"></iframe></noscript><!-- End Google Tag Manager--><!--if lt IE 8p.browsehappy
+    |You are using an
+    strong
+        |outdated browser
+    |. Please
+    a(href="http://browsehappy.com/")
+        |upgrade your browser
+    |to improve your experience.
+--><div id="wrap"><div role="navigation" class="navbar navbar-ornament navbar-fixed-top"><div class="container"><div class="navbar-header"><a href="/" class="navbar-brand">marisks # code</a></div></div></div><div class="container"><div class="row"><div class="col-sm-8"><article><header><h1>Episerver UI tests with canopy</h1><p class="meta"><time datetime="2017-10-30T00:00:00.000Z">Mon Oct 30 2017</time></p></header><div class="lead"><p>Several months ago I wrote an article about <a href="/2017/03/12/ui-testing-basics-in-episerver/">UI testing basics in Episerver</a>. This is more practical article how to implement these basic principles using <a href="https://lefthandedgoat.github.io/canopy/">canopy</a> testing framework.</p>
+
+</div><h1 id="installation">Installation</h1>
+<p>The first step starting with <a href="https://lefthandedgoat.github.io/canopy/">canopy</a> is creating a F# project - F# console application. And then installing canopy:</p>
+<pre><code class="lang-powershell">Install-Package canopy
+</code></pre>
+<p>For more installation instructions check <a href="https://lefthandedgoat.github.io/canopy/">the documentation</a>.</p>
+<p>After canopy installation, make sure that <em>Selenium.WebDriver</em> and <em>FSharp.Core</em> packages are updated to the latest version. This will help you avoid unexpected behavior.</p>
+<h1 id="configuration">Configuration</h1>
+<p>With canopy, you can use different browsers for testing. I prefer <em>Firefox</em> which is the default choice, but you can use <em>Chrome</em> or even headless browser - <em><a href="http://phantomjs.org/">PhantomJS</a></em>.</p>
+<p>When you choose the <em>Firefox</em>, you have to add <em>geckodriver.exe</em> to the project like in <a href="https://github.com/lefthandedgoat/canopyStarterKit/tree/master/canopyStarterKit">the canopy starter pack</a>. Or download it into some folder on your system and add it to the <em>Path</em> environment variable. You can download latest <em>geckodriver.exe</em> here: <a href="https://github.com/mozilla/geckodriver/releases">https://github.com/mozilla/geckodriver/releases</a>.</p>
+<p>Now, you can start with a basic UI testing program. Open <em>Program.fs</em> and replace the code there with this:</p>
+<pre><code class="lang-fsharp">open canopy
+open runner
+
+start firefox
+
+// Write yout UI tests here
+
+run()
+
+printfn &quot;press [enter] to exit&quot;
+System.Console.ReadLine() |&gt; ignore
+
+quit()
+</code></pre>
+<p>This code starts a new <em>Firefox</em> instance and runs tests you defined between <code>start firefox</code> and <code>run()</code>. You can try to run this application and will see that a new <em>Firefox</em> instance gets opened.</p>
+<p>There is one more thing I would make configurable - the root URL of your website. For this purpose, I have created a module in a new file - <em>Common.fs</em>. Add this file before <em>Program.fs</em>.</p>
+<pre><code class="lang-fsharp">module Common
+
+open canopy
+
+let mutable rootUrl = &quot;&quot;
+
+let goto path = url (rootUrl + path)
+</code></pre>
+<p>Here I have created a mutable variable which I will set in the <em>Program.fs</em>. I also added a helper method - <em>goto</em>, which I will use later to navigate to a specific relative URL in a website. The method is calling <em>canopy&#39;s</em> <em>url</em> method and combines root UR with a relative path.</p>
+<p>Now you can set the root URL in the <em>Program.fs</em> before the <code>start firefox</code> call.</p>
+<pre><code class="lang-fsharp">open canopy
+open runner
+open Common
+
+rootUrl &lt;- &quot;http://localhost:50356&quot;
+
+start firefox
+
+run()
+
+printfn &quot;press [enter] to exit&quot;
+System.Console.ReadLine() |&gt; ignore
+
+quit()
+</code></pre>
+<h1 id="test-structuring">Test structuring</h1>
+<p>While I could write my tests directly in the <em>Program.fs</em>, it is not practical. Instead, I am organizing tests in different scenarios files. For this purpose, I have created a folder - <em>Scenarios</em> directly above the <em>Program.fs</em> file. In this folder, I am adding separate scenarios I want to test. Mostly those scenarios match a single page or a feature. For example, I might have home page scenarios or search scenarios - here the home page scenarios match tests against the home page, but the search scenarios might execute a search query in the page header and then assert on results.</p>
+<p>As an example, I will test an <em>Alloy</em> site.</p>
+<h2 id="scenarios">Scenarios</h2>
+<p>Let&#39;s look at the home page scenarios. The home page looks like this:</p>
+<p><img src="/img/2017-10/alloy.png" class="img-responsive" alt="Alloy website"></p>
+<p>The page has header and footer which are common functionality for the whole site. So those are not a part of our home page scenarios. We care only about specific home page functionality - a jumbotron block on the top and three teaser blocks below.</p>
+<p><img src="/img/2017-10/alloy_home.png" class="img-responsive" alt="Alloy website home page"></p>
+<p>For the home page, we can verify that all blocks are in place. But we should not test the content which can change often. In our case, the jumbotron texts might often change while we know that our teaser block titles will likely not change. An editor might also add/remove blocks. In this case, we will have to modify our tests when it happens.</p>
+<p>So let&#39;s create a scenario.</p>
+<pre><code class="lang-fsharp">module HomePageScenarios
+
+open canopy
+open Common
+
+let positive _ =
+    context &quot;Positive home page tests&quot;
+
+    &quot;When on home page&quot; &amp;&amp;&amp; fun _ -&gt;
+        goto &quot;/&quot;
+
+    &quot;it contains jumbotron&quot; &amp;&amp;&amp; fun _ -&gt;
+        displayed &quot;.jumbotronblock&quot;
+
+    &quot;it contains Alloy Plan&quot; &amp;&amp;&amp; fun _ -&gt;
+        &quot;h2&quot; *~ &quot;Alloy Plan&quot;
+
+    &quot;it contains Alloy Track&quot; &amp;&amp;&amp; fun _ -&gt;
+        &quot;h2&quot; *~ &quot;Alloy Track&quot;
+
+    &quot;it contains Alloy Meet&quot; &amp;&amp;&amp; fun _ -&gt;
+        &quot;h2&quot; *~ &quot;Alloy Meet&quot;
+
+let all _ =
+    positive()
+</code></pre>
+<p>Here I have created a module - <em>HomePageScenarios</em>. I am splitting tests into separate contexts (groups). For the home page, I have only one - <em>positive</em>. And then at the end, I have defined a function which executes all test contexts I have in this module.</p>
+<p>Then I am opening the home page using our <em>goto</em> function from the <em>Common</em> module. The first assertion checks if <em>jumbotron</em> is displayed. I am not asserting the content as it might change quite often. The last three tests check for the teaser block titles.</p>
+<p>&quot;*~&quot; is a special operator in the <a href="https://lefthandedgoat.github.io/canopy/assertions.html">canopy</a> which executes a regex against the content. In our example, it just checks if the <em>h2</em> content is same as on the right, but it allows much more complex comparisons. One case which might be useful is a case-insensitive comparison.</p>
+<pre><code class="lang-fsharp">&quot;h2&quot; *~ &quot;(?i)Alloy Meet&quot;
+</code></pre>
+<p>But knowing how to do with regex and repeating it for all assertions you need it is quite time-consuming. So we can create our assertion operator.</p>
+<pre><code class="lang-fsharp">module Assertions
+
+open canopy
+
+let ( *=~ ) cssSelector value = cssSelector *~ (&quot;(?i)&quot; + value)
+</code></pre>
+<p>I have put it in a separate module - <em>Assertions</em>. My operator is &quot;*=~&quot; and the resulting assert looks like this:</p>
+<pre><code class="lang-fsharp">&quot;h2&quot; *=~ &quot;Alloy Meet&quot;
+</code></pre>
+<p>One disadvantage is that you have to remember all these operators. Instead, you can use normal functions with a descriptive name. </p>
+<h2 id="pages">Pages</h2>
+<p>There is one thing bothering me with navigation to the pages - I am hardcoding page URLs into tests. If these URLs change, then I have to change those in all tests. Same applies for selectors of elements. For example, &quot;.jumbotronblock&quot; selector might change in the future, but we are hardcoding it in the test.</p>
+<p>For this purpose, I have created a separate module where I am defining page data.</p>
+<pre><code class="lang-fsharp">module Pages
+
+type CommonData = { url: string; heading: string }
+type BasicPage = { common: CommonData }
+
+let articlePage = {
+    common = { url = &quot;/article&quot;; heading = &quot;Article&quot; }
+    }
+
+type HomePage = { common: CommonData; jumbotron: string }
+let homePage = {
+    common = { url = &quot;/&quot;; heading = &quot;Home&quot; };
+    jumbotron = &quot;.jumbotronblock&quot;
+    }
+</code></pre>
+<p>Here I am defining several types for our page definition. All pages will share some common data, so I have created <em>CommondData</em> type to hold the URL of the page and the heading. Then I have created a <em>BasicPage</em> type which just uses common data. This is useful for simple pages where you are not using any element selectors. You can see how I defined a <em>BasicPage</em> value for article page. For the home page, I have created a separate type which includes common data and a jumbotron selector.</p>
+<p>Now we can use <em>Pages</em> module in our tests.</p>
+<pre><code class="lang-fsharp">module HomePageScenarios
+
+open canopy
+open Common
+open Pages
+
+let positive _ =
+    context &quot;Positive home page tests&quot;
+
+    &quot;When on home page&quot; &amp;&amp;&amp; fun _ -&gt;
+        goto homePage.common.url
+
+    &quot;it contains jumbotron&quot; &amp;&amp;&amp; fun _ -&gt;
+        displayed homePage.jumbotron
+</code></pre>
+<p>Now, tests are easier to maintain. It is also better for readability.</p>
+<h2 id="navigation">Navigation</h2>
+<p>When testing a <em>CMS</em> website, it is important to navigate to the pages through the navigation. In most cases, you should start with the home page, then navigate to the page you want to test, and only then perform the tests on that page.</p>
+<p>You can write navigation manipulation directly in your tests, but it will be hard to maintain as you have to repeat this from test case to test case. So it is good to create some abstraction over navigation.</p>
+<pre><code class="lang-fsharp">module Navigate
+
+open canopy
+
+let toAlloyPlan () =
+    element &quot;.nav&quot;
+    |&gt; elementWithin &quot;Alloy Plan&quot;
+    |&gt; click
+
+let toNth index =
+    nth index &quot;.nav &gt; li a&quot;
+    |&gt; click
+</code></pre>
+<p>Here I am showing two different approaches. The first function - <em>toAlloyPlan</em> uses a certain navigation element. This approach works when navigation doesn&#39;t change often.</p>
+<p>The second method - <em>toNth</em> uses another approach. It navigates to the element by its index. This approach is useful when your navigation is dynamic.</p>
+<p>You can combine these two approaches for your website. For example, you could have a top navigation with an element <em>Categories</em> which has a sub-menu. The sub-menu can contain a list of categories which are dynamic. In this case, you can explicitly click on the <em>Categories</em> navigation item and then randomly click on the category.</p>
+<h1 id="summary">Summary</h1>
+<p><em>canopy</em> gives you a great lightweight API over Selenium which together with F# syntax makes simple and readable tests. But you can also write your UI tests successfully in C# and Selenium without any framework. The main idea is writing your tests keeping in mind that <em>CMS</em> content might change and structure tests accordingly.</p>
+<p>You can find a test project on <a href="https://github.com/marisks/examples/tree/master/UITests/Alloy">GitHub</a>.</p>
+</article><div id="disqus_thread"></div><script>/* * * CONFIGURATION VARIABLES: EDIT BEFORE PASTING INTO YOUR WEBPAGE * * */
+var disqus_shortname = 'marisksblog'; // required: replace example with your forum shortname
+
+/* * * DON'T EDIT BELOW THIS LINE * * */
+(function() {
+  var dsq = document.createElement('script'); dsq.type = 'text/javascript'; dsq.async = true;
+  dsq.src = '//' + disqus_shortname + '.disqus.com/embed.js';
+  (document.getElementsByTagName('head')[0] || document.getElementsByTagName('body')[0]).appendChild(dsq);
+})();</script><noscript>Please enable JavaScript to view the<a href="http://disqus.com/?ref_noscript">comments powered by Disqus.</a><a href="http://disqus.com" class="dsq-brlink">comments powered by<span class="logo-disqus">Disqus</span></a></noscript></div><div class="col-sm-1"><aside class="archive"><ul class="nav"><li><a href="/">2021</a></li><li><a href="/2020/">2020</a></li><li><a href="/2019/">2019</a></li><li><a href="/2018/">2018</a></li><li class="active"><a href="/2017/">2017</a></li><li><a href="/2016/">2016</a></li><li><a href="/2015/">2015</a></li><li><a href="/2014/">2014</a></li><li><a href="/2013/">2013</a></li><li><a href="/2012/">2012</a></li></ul></aside></div><div class="col-sm-3"><aside class="panel panel-default"><div class="panel-body"><div class="about"><img src="/img/common/profile_0021.jpg" alt="profile picture" class="center-block img-responsive thumbnail"><p>Hi! I'm Māris Krivtežs. I am Web developer primarily working with ASP.NET, EPiServer and front-end development at&nbsp;<a href="http://geta.no" target="_blank">Geta</a>, but same time learning different programming languages, learning new programming paradigms, architectures, and design. I spend my free time with my family, reading books, bicycling and traveling.</p></div><ul class="social"><li><a href="http://stackoverflow.com/users/660154/marisks" target="_blank"><i class="fa fa-stack-overflow"></i></a></li><li><a href="https://github.com/marisks" target="_blank"><i class="fa fa-github-alt"></i></a></li><li><a href="https://twitter.com/pioners1001" target="_blank"><i class="fa fa-twitter"></i></a></li><li><a href="http://www.linkedin.com/pub/maris-krivtezs/31/98b/b53" target="_blank"><i class="fa fa-linkedin"></i></a></li><li><a href="/rss.xml" target="_blank"><i class="fa fa-rss"></i></a></li></ul><a href="https://getadigital.com" target="_blank"><img src="/img/common/ident-geta-wordmark.svg" alt="Geta logo" class="center-block img-responsive aside-logo"></a></div></aside></div></div></div></div><div id="footer"><div class="container"><div class="container credit">Copyright &copy; 2017 Maris Krivtezs. All Rights Reserved, except for the parts enumerated below:<ul class="licence-list"><li>- The source code examples on this blog are covered by&nbsp;<a href="https://opensource.org/licenses/mit-license.php">MIT License</a>.</li><li>- This page content, excluding the visual design and the logotype, is covered by&nbsp;<a href="http://creativecommons.org/licenses/by/4.0/">Creative Commons Attribution 4.0 International License</a>.</li></ul></div></div></div><script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script><script>window.jQuery || document.write('<script src="/js/vendor/jquery-1.10.2.min.js"><\/script>')</script><script  src="/bower_components/bootstrap/dist/js/bootstrap.min.js"></script><script  src="/js/plugins.js"></script><script  src="/js/main.js"></script></body>
